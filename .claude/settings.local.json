@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "Bash(npm test)",
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs:*)",
+      "Bash(grep:*)",
+      "Bash(cd /Users/tomoyukikano/Desktop/My\\\\ Projects/HabitStacker/M1_Web_App && npm run dev:*)",
+      "Bash(kill:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

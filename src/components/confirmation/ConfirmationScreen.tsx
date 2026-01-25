@@ -1,0 +1,161 @@
+'use client';
+
+import { useState } from 'react';
+import { HabitRecommendation } from '@/lib/ai/prompts/intakeAgent';
+import { getHabitEmoji } from '@/types/habit';
+import Button from '@/components/ui/Button';
+import FeltUnderstoodRating from './FeltUnderstoodRating';
+
+interface ConfirmationScreenProps {
+  recommendation: HabitRecommendation;
+  onStartFirstRep: (feltUnderstoodRating: number | null) => void;
+  onStartLater: (feltUnderstoodRating: number | null) => void;
+  onBack: () => void;
+}
+
+/**
+ * Generate hero statement from anchor and action
+ * Format: "When I [anchor], I [action]."
+ */
+function generateHeroStatement(anchor: string, action: string): string {
+  // Clean up anchor - remove "After" prefix if present
+  let cleanAnchor = anchor.replace(/^after\s+/i, '').trim();
+  // Make first letter lowercase for flow
+  cleanAnchor = cleanAnchor.charAt(0).toLowerCase() + cleanAnchor.slice(1);
+
+  // Clean up action - ensure it starts naturally
+  let cleanAction = action.trim();
+  cleanAction = cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1);
+
+  return `When I ${cleanAnchor}, I ${cleanAction}.`;
+}
+
+/**
+ * Combine whyItFits into a single flowing paragraph
+ * R8: Max 2-3 sentences
+ */
+function generateSupportingText(whyItFits: string[], recovery: string): {
+  mainText: string;
+  recoveryText: string;
+} {
+  // Take first 1-2 reasons and combine naturally
+  const reasons = whyItFits.slice(0, 2);
+  const mainText = reasons.length > 1
+    ? `${reasons[0]}, and ${reasons[1].charAt(0).toLowerCase()}${reasons[1].slice(1)}`
+    : reasons[0] || 'This habit is designed to fit your life.';
+
+  // Clean up recovery text
+  const recoveryText = `If you miss: ${recovery}`;
+
+  return { mainText, recoveryText };
+}
+
+/**
+ * Get timing-aware CTA text
+ */
+function getCTAText(): string {
+  const hour = new Date().getHours();
+  if (hour >= 17) {
+    return 'Start first rep tonight';
+  } else if (hour >= 12) {
+    return 'Start first rep now';
+  } else {
+    return 'Start first rep today';
+  }
+}
+
+export default function ConfirmationScreen({
+  recommendation,
+  onStartFirstRep,
+  onStartLater,
+  onBack,
+}: ConfirmationScreenProps) {
+  const [rating, setRating] = useState<number | null>(null);
+
+  const emoji = getHabitEmoji(recommendation.anchor, recommendation.action);
+  const heroStatement = generateHeroStatement(recommendation.anchor, recommendation.action);
+  const { mainText, recoveryText } = generateSupportingText(
+    recommendation.whyItFits,
+    recommendation.recovery
+  );
+
+  return (
+    <div className="flex flex-col min-h-screen bg-[var(--bg-primary)]">
+      {/* Header */}
+      <div className="px-4 py-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm text-[var(--accent)] hover:opacity-80 transition-opacity"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+      </div>
+
+      {/* Main Content - Centered */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        {/* Emoji */}
+        <div className="text-5xl mb-6" role="img" aria-label="habit icon">
+          {emoji}
+        </div>
+
+        {/* Hero Statement */}
+        <blockquote className="text-2xl font-serif text-center text-[var(--text-primary)] max-w-[300px] leading-relaxed mb-8">
+          &ldquo;{heroStatement}&rdquo;
+        </blockquote>
+
+        {/* Divider */}
+        <div className="w-16 h-px bg-[var(--bg-tertiary)] mb-8" />
+
+        {/* Supporting Text */}
+        <div className="text-center max-w-[320px] space-y-3">
+          <p className="text-base text-[var(--text-secondary)] leading-relaxed">
+            {mainText}
+          </p>
+          <p className="text-sm text-[var(--text-tertiary)]">
+            {recoveryText}
+          </p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="px-6 pb-6 space-y-4">
+        {/* Primary CTA */}
+        <Button
+          onClick={() => onStartFirstRep(rating)}
+          variant="primary"
+          className="w-full"
+          size="lg"
+        >
+          {getCTAText()}
+        </Button>
+
+        {/* Secondary CTA */}
+        <button
+          onClick={() => onStartLater(rating)}
+          className="w-full text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] py-2 transition-colors"
+        >
+          I&apos;ll start later
+        </button>
+
+        {/* Divider */}
+        <div className="h-px bg-[var(--bg-tertiary)] my-2" />
+
+        {/* Rating (below CTA per R8) */}
+        <FeltUnderstoodRating onRate={setRating} />
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/* ============================================
+   HABIT STACKER DESIGN SYSTEM
+   "Warm Minimalism" - Crafted and Calm
+   ============================================ */
+
+:root {
+  /* Backgrounds - warm, not stark */
+  --bg-primary: #FDFBF7;
+  --bg-secondary: #F7F4EE;
+  --bg-tertiary: #EFEBE3;
+  --bg-inverse: #2C2825;
+
+  /* Text - never pure black */
+  --text-primary: #1A1816;
+  --text-secondary: #5C5550;
+  --text-tertiary: #8C8580;
+  --text-inverse: #FDFBF7;
+
+  /* Accent - grounded, not flashy */
+  --accent-primary: #2D6A5D;
+  --accent-hover: #245549;
+  --accent-subtle: #E8F2EF;
+
+  /* Semantic */
+  --success: #3D7A5A;
+  --success-subtle: #E8F5ED;
+  --warning: #B5872A;
+  --error: #A65D5D;
+
+  /* AI-specific */
+  --ai-message-bg: #F7F4EE;
+  --user-message-bg: #2D6A5D;
+  --user-message-text: #FFFFFF;
+
+  /* Animation timing */
+  --duration-fast: 0.1s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.3s;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Legacy mappings for compatibility */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+}
+
+/* Dark Mode - opt-in via class, not automatic
+   Add .dark class to html element to enable */
+html.dark {
+  --bg-primary: #1A1816;
+  --bg-secondary: #242220;
+  --bg-tertiary: #2E2B28;
+  --bg-inverse: #FDFBF7;
+
+  --text-primary: #F5F2ED;
+  --text-secondary: #A8A29E;
+  --text-tertiary: #6B6560;
+  --text-inverse: #1A1816;
+
+  --accent-primary: #4A9B8A;
+  --accent-hover: #5DB3A0;
+  --accent-subtle: #1E3530;
+
+  --success: #5B9B78;
+  --success-subtle: #1E3025;
+  --warning: #D4A84B;
+  --error: #C87878;
+
+  --ai-message-bg: #242220;
+  --user-message-bg: #2D6A5D;
+  --user-message-text: #FFFFFF;
+
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-outfit);
+  --font-display: var(--font-fraunces);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+/* Base styles */
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-outfit), 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings use display font */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-fraunces), 'Fraunces', Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================
+   CUSTOM ANIMATIONS
+   Purposeful, not decorative. Calm, not bouncy.
+   ============================================ */
+
+/* Message entrance animation */
+@keyframes message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Typing indicator - subtle pulse, NOT bounce */
+@keyframes typing-pulse {
+  0%, 60%, 100% {
+    opacity: 0.4;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* Utility classes for animations */
+.animate-message-enter {
+  animation: message-enter 0.3s var(--ease-out);
+}
+
+.animate-typing-pulse {
+  animation: typing-pulse 1.4s ease-in-out infinite;
+}
+
+/* iOS safe area support */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
