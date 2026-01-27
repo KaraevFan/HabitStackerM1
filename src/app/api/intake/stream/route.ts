@@ -10,9 +10,196 @@ interface IntakeRequest {
   forceRecommend?: boolean;
 }
 
+type AIProvider = 'anthropic' | 'openai';
+
+/**
+ * Get AI provider configuration from environment
+ */
+function getProviderConfig(): { provider: AIProvider; apiKey: string; model: string } {
+  const provider = (process.env.AI_PROVIDER || 'anthropic') as AIProvider;
+
+  if (provider === 'openai') {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
+    return {
+      provider: 'openai',
+      apiKey,
+      model: process.env.OPENAI_MODEL || 'gpt-4o',
+    };
+  }
+
+  // Default: Anthropic
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+  return {
+    provider: 'anthropic',
+    apiKey,
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250514',
+  };
+}
+
+/**
+ * Stream from Anthropic API
+ */
+async function streamAnthropic(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  messages: Array<{ role: string; content: string }>,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      stream: true,
+      system: systemPrompt,
+      messages: messages.length > 0
+        ? messages.map((m) => ({ role: m.role, content: m.content }))
+        : [{ role: 'user', content: 'Hi, I want to build a habit.' }],
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Anthropic API error: ${response.status} - ${error}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            fullContent += parsed.delta.text;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ chunk: parsed.delta.text })}\n\n`)
+            );
+          }
+
+          if (parsed.type === 'message_stop') {
+            return fullContent;
+          }
+        } catch {
+          // Skip malformed JSON chunks
+        }
+      }
+    }
+  }
+
+  return fullContent;
+}
+
+/**
+ * Stream from OpenAI API
+ */
+async function streamOpenAI(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  messages: Array<{ role: string; content: string }>,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+) {
+  const openaiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...(messages.length > 0
+      ? messages.map((m) => ({ role: m.role, content: m.content }))
+      : [{ role: 'user', content: 'Hi, I want to build a habit.' }]),
+  ];
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      stream: true,
+      messages: openaiMessages,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+
+          if (content) {
+            fullContent += content;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ chunk: content })}\n\n`)
+            );
+          }
+        } catch {
+          // Skip malformed JSON chunks
+        }
+      }
+    }
+  }
+
+  return fullContent;
+}
+
 /**
  * Streaming intake API endpoint
  * Uses Server-Sent Events to stream the response
+ *
+ * Configure via environment variables:
+ * - AI_PROVIDER: 'anthropic' (default) or 'openai'
+ * - ANTHROPIC_API_KEY / OPENAI_API_KEY
+ * - ANTHROPIC_MODEL (default: claude-sonnet-4-5-20250514) / OPENAI_MODEL (default: gpt-4o)
  */
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -28,13 +215,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    const config = getProviderConfig();
 
     // Build system prompt
     let systemPrompt = INTAKE_AGENT_SYSTEM_PROMPT;
@@ -46,106 +227,51 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-              max_tokens: 1024,
-              stream: true,
-              system: systemPrompt,
-              messages: messages.length > 0
-                ? messages.map((m) => ({
-                    role: m.role,
-                    content: m.content,
-                  }))
-                : [{ role: 'user', content: 'Hi, I want to build a habit.' }],
-            }),
-          });
+          let fullContent: string;
 
-          if (!response.ok) {
-            const error = await response.text();
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ error: `API error: ${response.status}` })}\n\n`)
+          if (config.provider === 'openai') {
+            fullContent = await streamOpenAI(
+              config.apiKey,
+              config.model,
+              systemPrompt,
+              messages,
+              controller,
+              encoder
             );
-            controller.close();
-            return;
+          } else {
+            fullContent = await streamAnthropic(
+              config.apiKey,
+              config.model,
+              systemPrompt,
+              messages,
+              controller,
+              encoder
+            );
           }
 
-          const reader = response.body?.getReader();
-          if (!reader) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ error: 'No response body' })}\n\n`)
-            );
-            controller.close();
-            return;
-          }
-
-          const decoder = new TextDecoder();
-          let fullContent = '';
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                  const parsed = JSON.parse(data);
-
-                  // Handle content block delta
-                  if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                    fullContent += parsed.delta.text;
-                    // Send chunk to client
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ chunk: parsed.delta.text })}\n\n`)
-                    );
-                  }
-
-                  // Handle message stop
-                  if (parsed.type === 'message_stop') {
-                    // Parse the full JSON response
-                    const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                      try {
-                        const agentResponse = JSON.parse(jsonMatch[0]) as IntakeAgentResponse;
-                        if (isValidIntakeResponse(agentResponse)) {
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({ done: true, response: agentResponse })}\n\n`)
-                          );
-                        } else {
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({ error: 'Invalid response format' })}\n\n`)
-                          );
-                        }
-                      } catch {
-                        controller.enqueue(
-                          encoder.encode(`data: ${JSON.stringify({ error: 'Failed to parse response JSON' })}\n\n`)
-                        );
-                      }
-                    } else {
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({ error: 'No JSON in response' })}\n\n`)
-                      );
-                    }
-                  }
-                } catch {
-                  // Skip malformed JSON chunks
-                }
+          // Parse the full JSON response
+          const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const agentResponse = JSON.parse(jsonMatch[0]) as IntakeAgentResponse;
+              if (isValidIntakeResponse(agentResponse)) {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ done: true, response: agentResponse })}\n\n`)
+                );
+              } else {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ error: 'Invalid response format' })}\n\n`)
+                );
               }
+            } catch {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ error: 'Failed to parse response JSON' })}\n\n`)
+              );
             }
+          } else {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ error: 'No JSON in response' })}\n\n`)
+            );
           }
 
           controller.close();
