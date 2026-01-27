@@ -77,16 +77,70 @@ Respond with JSON:
 {
   "anchor": "10:10pm alarm labeled 'Pack up'",
   "action": "Spend 3-5 minutes moving gaming gear out of bedroom",
-  "followUp": "Brush teeth, dim lights, in bed by 11pm",
+  "followUp": ["Brush teeth", "Dim lights", "In bed by 11pm"],
   "whyItFits": [
     "Your main blocker is location—gaming at your bedroom desk keeps you playing",
     "Moving gear creates a physical boundary (harder to ignore than alarms)",
     "Solo sessions = easier to stop at a set time"
   ],
-  "recovery": "Don't punish yourself. Note what happened and try the same routine tomorrow."
+  "recovery": "Don't punish yourself. Note what happened and try the same routine tomorrow.",
+  "identity": "Someone who protects their sleep",
+  "identityBehaviors": [
+    "Has a clear 'shutdown' signal each night",
+    "Keeps screens out of the bedroom",
+    "Prioritizes rest over 'one more episode'"
+  ],
+  "setupChecklist": [
+    { "category": "environment", "text": "Set up phone charging station outside bedroom" },
+    { "category": "environment", "text": "Place book on pillow as visual cue" },
+    { "category": "mental", "text": "Tell partner about new wind-down routine" },
+    { "category": "tech", "text": "Schedule Do Not Disturb for 10pm" }
+  ]
 }
 
 This structured data powers the confirmation screen. The chat message itself should be SHORT—just the core recommendation + "Want to try this?"
+
+### Identity, Setup, and Follow-up fields
+
+When you recommend, also generate:
+
+1. **identity**: Who the user is becoming (8-12 words max)
+   - Format: "Someone who [identity]"
+   - Connect the habit to a larger transformation
+   - Examples: "Someone who protects their sleep", "Someone who moves their body daily"
+
+2. **identityBehaviors**: 3-5 behaviors people with this identity have
+   - Observable actions, not vague traits
+   - Things the user can aspire to
+   - Examples: "Has a clear shutdown signal each night", "Keeps phone out of bedroom"
+
+3. **setupChecklist**: 4-7 ONE-TIME environment prep tasks (categorized)
+
+   CRITICAL: Only include tasks done ONCE before the first rep.
+
+   ✓ INCLUDE: "Download the Meetup app", "Set up charging station", "Tell partner about routine"
+   ✗ EXCLUDE: "Add event to calendar after RSVPing" — this is RECURRING, put in followUp
+
+   Categories:
+   - At least 2 "environment" items (physical setup: where to put things, what to place where)
+   - 1-2 "mental" items (who to tell, what to decide in advance)
+   - 1-2 "tech" items (phone settings, app changes, reminders)
+
+   Each item should be:
+   - Actionable (starts with verb or implies clear action)
+   - Completable in <5 minutes
+   - Done only ONCE, not repeated each time
+
+4. **followUp**: Array of recurring steps done AFTER each rep (optional)
+
+   Include when the habit has natural follow-through actions that happen every time.
+
+   Examples:
+   - ["Add event to calendar", "Block the time"]
+   - ["Log what you read", "Put book back on nightstand"]
+   - ["Refill water bottle for tomorrow"]
+
+   These complete the ritual loop. If a task happens after EVERY rep, it's followUp, not setupChecklist.
 
 ### Field notes:
 
@@ -154,14 +208,34 @@ Start simple and warm. Ask what brings them here. Keep it to 1-2 sentences.
 `;
 
 /**
+ * Setup checklist item category
+ */
+export type SetupItemCategory = 'environment' | 'mental' | 'tech';
+
+/**
+ * Setup checklist item from AI (before user interaction)
+ */
+export interface SetupItemInput {
+  category: SetupItemCategory;
+  text: string;
+}
+
+/**
  * Habit recommendation structure for confirmation screen
+ *
+ * Note: followUp maps to HabitSystem.then — these are recurring steps
+ * done AFTER each rep, not one-time setup tasks.
  */
 export interface HabitRecommendation {
   anchor: string;
   action: string;
-  followUp?: string;
+  followUp?: string[];  // Recurring steps done AFTER each rep (maps to HabitSystem.then)
   whyItFits: string[];
   recovery: string;
+  // V0.5 additions
+  identity: string; // "Someone who [identity]"
+  identityBehaviors: string[]; // 3-5 observable behaviors
+  setupChecklist: SetupItemInput[]; // ONE-TIME environment prep items only
 }
 
 /**

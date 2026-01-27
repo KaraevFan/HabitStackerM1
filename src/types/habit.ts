@@ -147,6 +147,17 @@ export interface RepLog {
 }
 
 /**
+ * Setup checklist item (V0.5)
+ */
+export interface SetupItem {
+  id: string;
+  category: 'environment' | 'mental' | 'tech';
+  text: string;
+  completed: boolean;
+  notApplicable: boolean;
+}
+
+/**
  * Habit system with toolkit (R8)
  * Combines core habit design with tune-up toolkit
  */
@@ -154,9 +165,16 @@ export interface HabitSystem {
   // Core (from intake agent)
   anchor: string;
   action: string;
-  then?: string; // Optional follow-up action
+  then?: string[]; // Recurring steps done AFTER each rep (from HabitRecommendation.followUp)
   recovery: string;
   whyItFits: string[]; // Personalized reasons from conversation
+
+  // Identity (V0.5 - generated during intake)
+  identity?: string; // "Someone who protects their sleep"
+  identityBehaviors?: string[]; // ["Has a clear shutdown signal", ...]
+
+  // Setup checklist (V0.5)
+  setupChecklist?: SetupItem[];
 
   // Toolkit (from tune-up conversation)
   tinyVersion?: string; // 30-second fallback for bad days
@@ -321,10 +339,24 @@ export function planDetailsToSystem(
   return {
     anchor: planDetails.anchor,
     action: planDetails.action,
-    then: planDetails.prime || undefined,
+    then: planDetails.prime ? [planDetails.prime] : undefined,
     recovery: planDetails.recovery,
     whyItFits,
   };
+}
+
+/**
+ * Normalize then field from string | string[] | undefined to string[]
+ * Migration helper for existing data that may have string format
+ */
+export function normalizeThenSteps(then: string | string[] | undefined): string[] {
+  if (!then) return [];
+  if (Array.isArray(then)) return then;
+  // Legacy string format — split by common delimiters or wrap as single item
+  if (then.includes(',')) {
+    return then.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return [then];
 }
 
 /**
@@ -530,4 +562,17 @@ export function getDomainById(id: HabitDomain): DomainInfo | undefined {
 export function getSubProblemById(domainId: HabitDomain, subProblemId: string): SubProblemInfo | undefined {
   const domain = getDomainById(domainId);
   return domain?.subProblems.find(sp => sp.id === subProblemId);
+}
+
+/**
+ * Get setup checklist progress (V0.5)
+ */
+export function getSetupProgress(items: SetupItem[] | undefined): { completed: number; total: number } {
+  if (!items || items.length === 0) {
+    return { completed: 0, total: 0 };
+  }
+  // Exclude N/A items from total
+  const applicableItems = items.filter(item => !item.notApplicable);
+  const completedItems = applicableItems.filter(item => item.completed);
+  return { completed: completedItems.length, total: applicableItems.length };
 }

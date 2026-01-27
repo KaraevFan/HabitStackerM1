@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { HabitSystem, getHabitEmoji } from '@/types/habit';
+import { HabitSystem, getHabitEmoji, normalizeThenSteps } from '@/types/habit';
 import Button from '@/components/ui/Button';
 import EditBottomSheet from './EditBottomSheet';
 
@@ -36,9 +36,9 @@ const EDIT_CONFIGS: Record<
     placeholder: 'I will...',
   },
   then: {
-    title: 'Edit follow-up',
-    description: 'What happens after you complete your habit.',
-    placeholder: 'Then I...',
+    title: 'Edit follow-up steps',
+    description: 'What happens after you complete your habit? One step per line.',
+    placeholder: 'Add event to calendar\nBlock the time',
   },
   tinyVersion: {
     title: 'Edit tiny version',
@@ -80,12 +80,22 @@ export default function YourSystemScreen({
 
   const handleSave = (value: string) => {
     if (editField) {
-      onUpdateSystem({ [editField]: value });
+      // Handle 'then' field specially - convert to array
+      if (editField === 'then') {
+        const steps = value.split('\n').map(s => s.trim()).filter(Boolean);
+        onUpdateSystem({ then: steps.length > 0 ? steps : undefined });
+      } else {
+        onUpdateSystem({ [editField]: value });
+      }
     }
     setEditField(null);
   };
 
   const getFieldValue = (field: Exclude<EditField, null>): string => {
+    // Handle 'then' field specially - convert array to newline-separated string
+    if (field === 'then') {
+      return normalizeThenSteps(system.then).join('\n');
+    }
     return (system[field] as string) || '';
   };
 
@@ -157,16 +167,27 @@ export default function YourSystemScreen({
               </div>
 
               {/* Then (if present) */}
-              {system.then && (
+              {system.then && normalizeThenSteps(system.then).length > 0 && (
                 <>
                   <div className="ml-4 h-4 w-0.5 bg-[var(--bg-tertiary)]" />
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center text-lg">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center text-lg flex-shrink-0">
                       ✓
                     </div>
-                    <p className="flex-1 text-[var(--text-primary)]">
-                      {system.then}
-                    </p>
+                    <div className="flex-1 text-[var(--text-primary)]">
+                      {normalizeThenSteps(system.then).length === 1 ? (
+                        <p>{normalizeThenSteps(system.then)[0]}</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {normalizeThenSteps(system.then).map((step, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="text-[var(--text-tertiary)]">•</span>
+                              <span>{step}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 </>
               )}

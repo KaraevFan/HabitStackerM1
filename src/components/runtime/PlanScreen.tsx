@@ -1,12 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
-import { HabitData, getPlanScreenState, getHabitEmoji } from "@/types/habit";
+import SevenDayDots from "@/components/journey/SevenDayDots";
+import IdentitySection from "@/components/self/IdentitySection";
+import ProgressionSection from "@/components/self/ProgressionSection";
+import SetupChecklist from "@/components/system/SetupChecklist";
+import { HabitData, getPlanScreenState, getHabitEmoji, getSetupProgress, normalizeThenSteps } from "@/types/habit";
+import { toggleSetupItem, markSetupItemNA } from "@/lib/store/habitStore";
 
 interface PlanScreenProps {
   habitData: HabitData;
 }
+
+type TabId = 'system' | 'journey' | 'self' | null;
 
 function formatLastDone(lastDoneDate: string | null): string {
   if (!lastDoneDate) return "—";
@@ -26,8 +34,11 @@ function formatLastDone(lastDoneDate: string | null): string {
   return `${diffDays} days ago`;
 }
 
-export default function PlanScreen({ habitData }: PlanScreenProps) {
-  const { snapshot, planDetails, system, repsCount, lastDoneDate } = habitData;
+export default function PlanScreen({ habitData: initialHabitData }: PlanScreenProps) {
+  const [habitData, setHabitData] = useState(initialHabitData);
+  const [activeTab, setActiveTab] = useState<TabId>(null);
+
+  const { snapshot, planDetails, system, repsCount, lastDoneDate, createdAt } = habitData;
 
   // Get habit info - prefer system (from intake agent), fall back to planDetails (legacy)
   const anchor = system?.anchor || planDetails?.anchor;
@@ -46,11 +57,47 @@ export default function PlanScreen({ habitData }: PlanScreenProps) {
   const emoji = getHabitEmoji(anchor, action);
 
   // Generate hero statement
-  let cleanAnchor = anchor.replace(/^after\s+/i, '').trim();
+  // Clean anchor: remove "after", time qualifiers (tonight, today, etc.), and "you" → "I"
+  let cleanAnchor = anchor
+    .replace(/^(after|when)\s+/i, '')
+    .replace(/^(tonight|today|tomorrow|this evening|this morning)\s+/i, '')
+    .replace(/^(after|when)\s+/i, '') // Remove again in case time qualifier was first
+    .replace(/\byou\b/gi, 'I')
+    .replace(/\byour\b/gi, 'my')
+    .trim();
   cleanAnchor = cleanAnchor.charAt(0).toLowerCase() + cleanAnchor.slice(1);
-  let cleanAction = action.trim();
+
+  let cleanAction = action
+    .replace(/\byou\b/gi, 'I')
+    .replace(/\byour\b/gi, 'my')
+    .trim();
   cleanAction = cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1);
   const heroStatement = `When I ${cleanAnchor}, I ${cleanAction}.`;
+
+  // Setup checklist handlers
+  const handleToggleSetupItem = (itemId: string) => {
+    const updated = toggleSetupItem(itemId);
+    setHabitData(updated);
+  };
+
+  const handleMarkSetupItemNA = (itemId: string) => {
+    const updated = markSetupItemNA(itemId);
+    setHabitData(updated);
+  };
+
+  // Toggle tab
+  const handleTabClick = (tabId: TabId) => {
+    setActiveTab(activeTab === tabId ? null : tabId);
+  };
+
+  // Check if setup checklist is incomplete
+  const setupProgress = getSetupProgress(system?.setupChecklist);
+  const hasIncompleteSetup = setupProgress.total > 0 && setupProgress.completed < setupProgress.total;
+  const isPreFirstRep = planState === 'pre_first_rep';
+
+  // Check if identity is available and user has done first rep
+  const hasIdentity = !!system?.identity;
+  const hasCompletedFirstRep = repsCount > 0;
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
@@ -76,13 +123,16 @@ export default function PlanScreen({ habitData }: PlanScreenProps) {
             </p>
           </div>
 
+          {/* 7-Day Dots */}
+          <SevenDayDots repLogs={habitData.repLogs || []} />
+
           {/* Stats */}
           <div className="flex justify-center gap-6 text-center">
             <div>
               <p className="text-xl font-semibold text-[var(--text-primary)]">
                 {repsCount}
               </p>
-              <p className="text-sm text-[var(--text-tertiary)]">Reps</p>
+              <p className="text-sm text-[var(--text-tertiary)]">{repsCount === 1 ? 'Rep' : 'Reps'}</p>
             </div>
             <div className="w-px bg-[var(--bg-tertiary)]" />
             <div>
@@ -91,19 +141,6 @@ export default function PlanScreen({ habitData }: PlanScreenProps) {
               </p>
               <p className="text-sm text-[var(--text-tertiary)]">Last done</p>
             </div>
-            {planState === 'tuned' && (
-              <>
-                <div className="w-px bg-[var(--bg-tertiary)]" />
-                <div>
-                  <Link
-                    href="/system"
-                    className="text-sm text-[var(--accent)] hover:underline"
-                  >
-                    View system →
-                  </Link>
-                </div>
-              </>
-            )}
           </div>
 
           {/* CTA */}
@@ -155,24 +192,188 @@ export default function PlanScreen({ habitData }: PlanScreenProps) {
             </div>
           )}
 
-          {/* Week reminder (if snapshot exists) */}
-          {snapshot && (
+          {/* Contextual Cards */}
+
+          {/* Setup checklist card (pre-first-rep or incomplete) */}
+          {(isPreFirstRep || hasIncompleteSetup) && setupProgress.total > 0 && activeTab !== 'system' && (
+            <button
+              onClick={() => setActiveTab('system')}
+              className="w-full text-left rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] p-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">⚙️</span>
+                  <span className="text-sm text-[var(--text-primary)]">
+                    Complete your setup ({setupProgress.completed}/{setupProgress.total})
+                  </span>
+                </div>
+                <span className="text-sm text-[var(--accent)]">→</span>
+              </div>
+            </button>
+          )}
+
+          {/* Identity card (after first rep, not surfaced yet) */}
+          {hasCompletedFirstRep && hasIdentity && activeTab !== 'self' && (
+            <button
+              onClick={() => setActiveTab('self')}
+              className="w-full text-left rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] p-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">✨</span>
+                  <span className="text-sm text-[var(--text-primary)]">
+                    See who you&apos;re becoming
+                  </span>
+                </div>
+                <span className="text-sm text-[var(--accent)]">→</span>
+              </div>
+            </button>
+          )}
+
+          {/* Tab Navigation */}
+          <div className="border-t border-b border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] -mx-4 px-4 py-3">
+            <div className="flex justify-center gap-1">
+              {(['system', 'journey', 'self'] as const).map((tabId) => (
+                <button
+                  key={tabId}
+                  onClick={() => handleTabClick(tabId)}
+                  className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === tabId
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                  }`}
+                >
+                  {tabId.charAt(0).toUpperCase() + tabId.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'system' && (
+            <div className="rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] p-5 space-y-6">
+              {/* Ritual summary */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
+                  Your Ritual
+                </p>
+                <div className="space-y-2 text-sm">
+                  <p className="text-[var(--text-secondary)]">
+                    <span className="text-[var(--text-tertiary)]">Anchor:</span>{' '}
+                    <span className="text-[var(--text-primary)]">{anchor}</span>
+                  </p>
+                  <p className="text-[var(--text-secondary)]">
+                    <span className="text-[var(--text-tertiary)]">Action:</span>{' '}
+                    <span className="text-[var(--text-primary)]">{action}</span>
+                  </p>
+                  {system?.then && normalizeThenSteps(system.then).length > 0 && (
+                    <div className="text-[var(--text-secondary)]">
+                      <span className="text-[var(--text-tertiary)]">Then:</span>{' '}
+                      {normalizeThenSteps(system.then).length === 1 ? (
+                        <span className="text-[var(--text-primary)]">{normalizeThenSteps(system.then)[0]}</span>
+                      ) : (
+                        <ul className="mt-1 ml-4 space-y-0.5">
+                          {normalizeThenSteps(system.then).map((step, i) => (
+                            <li key={i} className="text-[var(--text-primary)] list-disc">{step}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <Link
+                  href="/system"
+                  className="inline-block text-sm text-[var(--accent)] hover:underline"
+                >
+                  View full system →
+                </Link>
+              </div>
+
+              {/* Setup checklist (if available) */}
+              {system?.setupChecklist && system.setupChecklist.length > 0 && (
+                <>
+                  <div className="h-px bg-[var(--bg-tertiary)]" />
+                  <SetupChecklist
+                    items={system.setupChecklist}
+                    onToggle={handleToggleSetupItem}
+                    onMarkNA={handleMarkSetupItemNA}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'journey' && (
+            <div className="rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] p-5 space-y-6">
+              {/* Larger 7-day dots view */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
+                  Last 7 Days
+                </p>
+                <SevenDayDots repLogs={habitData.repLogs || []} />
+              </div>
+
+              {/* Stats */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
+                  Your Progress
+                </p>
+                <div className="flex gap-6">
+                  <div>
+                    <p className="text-2xl font-semibold text-[var(--text-primary)]">{repsCount}</p>
+                    <p className="text-xs text-[var(--text-tertiary)]">Total reps</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-semibold text-[var(--text-primary)]">
+                      {formatLastDone(lastDoneDate)}
+                    </p>
+                    <p className="text-xs text-[var(--text-tertiary)]">Last done</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'self' && (
+            <div className="rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] p-5 space-y-6">
+              {/* Identity section */}
+              {system?.identity && (
+                <IdentitySection
+                  identity={system.identity}
+                  identityBehaviors={system.identityBehaviors || []}
+                />
+              )}
+
+              {/* Divider */}
+              {system?.identity && (
+                <div className="h-px bg-[var(--bg-tertiary)]" />
+              )}
+
+              {/* Progression section */}
+              <ProgressionSection repsCount={repsCount} createdAt={createdAt} />
+            </div>
+          )}
+
+          {/* Week reminder (if snapshot exists and no tab open) */}
+          {snapshot && !activeTab && (
             <p className="text-center text-sm text-[var(--text-tertiary)]">
               {snapshot.line1}
             </p>
           )}
 
-          {/* Why it works */}
-          <details className="rounded-lg bg-[var(--bg-secondary)] p-4 border border-[var(--bg-tertiary)]">
-            <summary className="cursor-pointer text-sm font-medium text-[var(--text-secondary)]">
-              Why this works
-            </summary>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Tiny actions attached to existing routines are nearly impossible to skip.
-              If you do miss, the 30-second recovery brings you right back.
-              No lost progress—just continuity.
-            </p>
-          </details>
+          {/* Why it works (collapsed when tab is open) */}
+          {!activeTab && (
+            <details className="rounded-lg bg-[var(--bg-secondary)] p-4 border border-[var(--bg-tertiary)]">
+              <summary className="cursor-pointer text-sm font-medium text-[var(--text-secondary)]">
+                Why this works
+              </summary>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Tiny actions attached to existing routines are nearly impossible to skip.
+                If you do miss, the 30-second recovery brings you right back.
+                No lost progress—just continuity.
+              </p>
+            </details>
+          )}
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadHabitData, logRep, updateRepPhoto } from '@/lib/store/habitStore';
-import { HabitData, getHabitEmoji } from '@/types/habit';
+import { HabitData, getHabitEmoji, normalizeThenSteps } from '@/types/habit';
 import Button from '@/components/ui/Button';
 import PhotoPromptScreen from '@/components/photo/PhotoPromptScreen';
 
@@ -155,10 +155,15 @@ export default function TodayPage() {
         </blockquote>
 
         {/* Then (if present) */}
-        {then && (
-          <p className="text-sm text-[var(--text-tertiary)] mb-6">
-            Then: {then}
-          </p>
+        {then && normalizeThenSteps(then).length > 0 && (
+          <div className="text-sm text-[var(--text-tertiary)] mb-6 text-center">
+            <span>Then: </span>
+            {normalizeThenSteps(then).length === 1 ? (
+              <span>{normalizeThenSteps(then)[0]}</span>
+            ) : (
+              <span>{normalizeThenSteps(then).join(' → ')}</span>
+            )}
+          </div>
         )}
 
         {/* Week reminder */}

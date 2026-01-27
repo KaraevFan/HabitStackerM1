@@ -1,4 +1,4 @@
-import { HabitData, RepEvent, RepLog, HabitSystem, createInitialHabitData, HabitState, ConsultStep, PlanDetails, HabitSnapshot, generateRepLogId } from "@/types/habit";
+import { HabitData, RepEvent, RepLog, HabitSystem, createInitialHabitData, ConsultStep, PlanDetails, HabitSnapshot, generateRepLogId } from "@/types/habit";
 
 const STORAGE_KEY = "habit-stacker-data";
 
@@ -267,4 +267,42 @@ export function updateSystemToolkit(toolkit: {
  */
 export function saveFeltUnderstoodRating(rating: number): HabitData {
   return updateHabitData({ feltUnderstoodRating: rating });
+}
+
+/**
+ * Toggle setup checklist item completion (V0.5)
+ */
+export function toggleSetupItem(itemId: string): HabitData {
+  const current = loadHabitData();
+  if (!current.system?.setupChecklist) return current;
+
+  const setupChecklist = current.system.setupChecklist.map((item) =>
+    item.id === itemId ? { ...item, completed: !item.completed } : item
+  );
+
+  const system: HabitSystem = {
+    ...current.system,
+    setupChecklist,
+  };
+
+  return updateHabitData({ system });
+}
+
+/**
+ * Mark setup checklist item as not applicable (V0.5)
+ */
+export function markSetupItemNA(itemId: string): HabitData {
+  const current = loadHabitData();
+  if (!current.system?.setupChecklist) return current;
+
+  const setupChecklist = current.system.setupChecklist.map((item) =>
+    item.id === itemId ? { ...item, notApplicable: !item.notApplicable, completed: false } : item
+  );
+
+  const system: HabitSystem = {
+    ...current.system,
+    setupChecklist,
+  };
+
+  return updateHabitData({ system });
 }

@@ -5,9 +5,36 @@ import { useRouter } from 'next/navigation';
 import { ChatContainer } from '@/components/chat';
 import { ConfirmationScreen } from '@/components/confirmation';
 import { useIntakeAgent } from '@/lib/ai/useIntakeAgent';
-import { updateHabitData, loadHabitData } from '@/lib/store/habitStore';
+import { updateHabitData } from '@/lib/store/habitStore';
 import { extractPlanFromRecommendation } from '@/types/conversation';
 import { IntakeAnalytics } from '@/lib/analytics/intakeAnalytics';
+import { HabitSystem, SetupItem } from '@/types/habit';
+import { HabitRecommendation } from '@/lib/ai/prompts/intakeAgent';
+
+/**
+ * Convert recommendation to HabitSystem
+ */
+function recommendationToSystem(rec: HabitRecommendation): HabitSystem {
+  // Convert setup checklist items with IDs
+  const setupChecklist: SetupItem[] = (rec.setupChecklist || []).map((item, index) => ({
+    id: `setup-${index}`,
+    category: item.category,
+    text: item.text,
+    completed: false,
+    notApplicable: false,
+  }));
+
+  return {
+    anchor: rec.anchor,
+    action: rec.action,
+    then: rec.followUp,
+    recovery: rec.recovery,
+    whyItFits: rec.whyItFits || [],
+    identity: rec.identity,
+    identityBehaviors: rec.identityBehaviors,
+    setupChecklist: setupChecklist.length > 0 ? setupChecklist : undefined,
+  };
+}
 
 /**
  * Setup page - Chat-based intake flow
@@ -63,10 +90,12 @@ export default function SetupPage() {
 
     // Save to HabitData
     const planDetails = extractPlanFromRecommendation(state.recommendation);
+    const system = recommendationToSystem(state.recommendation);
 
     updateHabitData({
       state: 'active',
       planDetails,
+      system,
       snapshot: {
         line1: 'Week 1: Show up.',
         line2: `After ${planDetails.anchor}, ${planDetails.action}.`,
@@ -97,10 +126,12 @@ export default function SetupPage() {
 
     // Save to HabitData but don't log first rep
     const planDetails = extractPlanFromRecommendation(state.recommendation);
+    const system = recommendationToSystem(state.recommendation);
 
     updateHabitData({
       state: 'designed',
       planDetails,
+      system,
       snapshot: {
         line1: 'Week 1: Show up.',
         line2: `After ${planDetails.anchor}, ${planDetails.action}.`,

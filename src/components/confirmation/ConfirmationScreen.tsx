@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { HabitRecommendation } from '@/lib/ai/prompts/intakeAgent';
-import { getHabitEmoji } from '@/types/habit';
+import { getHabitEmoji, SetupItem } from '@/types/habit';
 import Button from '@/components/ui/Button';
 import FeltUnderstoodRating from './FeltUnderstoodRating';
+import SetupChecklist from '@/components/system/SetupChecklist';
 
 interface ConfirmationScreenProps {
   recommendation: HabitRecommendation;
@@ -18,13 +19,21 @@ interface ConfirmationScreenProps {
  * Format: "When I [anchor], I [action]."
  */
 function generateHeroStatement(anchor: string, action: string): string {
-  // Clean up anchor - remove "After" prefix if present
-  let cleanAnchor = anchor.replace(/^after\s+/i, '').trim();
-  // Make first letter lowercase for flow
+  // Clean anchor: remove "after", time qualifiers (tonight, today, etc.), and "you" → "I"
+  let cleanAnchor = anchor
+    .replace(/^(after|when)\s+/i, '')
+    .replace(/^(tonight|today|tomorrow|this evening|this morning)\s+/i, '')
+    .replace(/^(after|when)\s+/i, '') // Remove again in case time qualifier was first
+    .replace(/\byou\b/gi, 'I')
+    .replace(/\byour\b/gi, 'my')
+    .trim();
   cleanAnchor = cleanAnchor.charAt(0).toLowerCase() + cleanAnchor.slice(1);
 
-  // Clean up action - ensure it starts naturally
-  let cleanAction = action.trim();
+  // Clean up action - ensure it starts naturally, convert "you" to "I"
+  let cleanAction = action
+    .replace(/\byou\b/gi, 'I')
+    .replace(/\byour\b/gi, 'my')
+    .trim();
   cleanAction = cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1);
 
   return `When I ${cleanAnchor}, I ${cleanAction}.`;
@@ -64,6 +73,20 @@ function getCTAText(): string {
   }
 }
 
+/**
+ * Convert AI setup items to SetupItem format for preview
+ */
+function convertToSetupItems(recommendation: HabitRecommendation): SetupItem[] {
+  if (!recommendation.setupChecklist) return [];
+  return recommendation.setupChecklist.map((item, index) => ({
+    id: `setup-${index}`,
+    category: item.category,
+    text: item.text,
+    completed: false,
+    notApplicable: false,
+  }));
+}
+
 export default function ConfirmationScreen({
   recommendation,
   onStartFirstRep,
@@ -78,6 +101,9 @@ export default function ConfirmationScreen({
     recommendation.whyItFits,
     recommendation.recovery
   );
+  const setupItems = convertToSetupItems(recommendation);
+  const hasIdentity = !!recommendation.identity;
+  const hasSetupChecklist = setupItems.length > 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-primary)]">
@@ -128,7 +154,37 @@ export default function ConfirmationScreen({
             {recoveryText}
           </p>
         </div>
+
+        {/* Identity Preview (V0.5) */}
+        {hasIdentity && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-[var(--text-secondary)]">
+              You&apos;re becoming{' '}
+              <span className="font-medium text-[var(--text-primary)]">
+                {recommendation.identity?.toLowerCase()}
+              </span>
+              .
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Setup Checklist Preview (V0.5) - Collapsed by default */}
+      {hasSetupChecklist && (
+        <div className="px-6 pb-4">
+          <details className="rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)]">
+            <summary className="p-4 cursor-pointer flex items-center justify-between">
+              <span className="text-sm text-[var(--text-secondary)]">
+                Setup checklist ({setupItems.length} items)
+              </span>
+              <span className="text-xs text-[var(--accent)]">Tap to preview</span>
+            </summary>
+            <div className="px-4 pb-4">
+              <SetupChecklist items={setupItems} readOnly />
+            </div>
+          </details>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="px-6 pb-6 space-y-4">

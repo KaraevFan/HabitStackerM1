@@ -112,12 +112,18 @@ export function isConversationComplete(state: IntakeState): boolean {
 /**
  * Extract plan details from recommendation
  * Used when user accepts and we need to save to HabitData
+ * Note: prime is legacy field, we join followUp array for backwards compatibility
  */
 export function extractPlanFromRecommendation(rec: HabitRecommendation) {
+  // Convert followUp array to single string for legacy PlanDetails.prime field
+  const prime = rec.followUp && rec.followUp.length > 0
+    ? rec.followUp.join(', ')
+    : null;
+
   return {
     anchor: rec.anchor,
     action: rec.action,
-    prime: rec.followUp || null,
+    prime,
     recovery: rec.recovery,
   };
 }
