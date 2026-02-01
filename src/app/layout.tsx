@@ -41,7 +41,9 @@ export default function RootLayout({
       <body
         className={`${fraunces.variable} ${outfit.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {children}
+        <div className="app-frame">
+          {children}
+        </div>
       </body>
     </html>
   );
