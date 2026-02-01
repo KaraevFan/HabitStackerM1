@@ -95,10 +95,38 @@ Respond with JSON:
     { "category": "environment", "text": "Place book on pillow as visual cue" },
     { "category": "mental", "text": "Tell partner about new wind-down routine" },
     { "category": "tech", "text": "Schedule Do Not Disturb for 10pm" }
-  ]
+  ],
+  "habitType": "time_anchored",
+  "anchorTime": "22:10",
+  "principle": "Consistent cues build automatic associations faster than willpower alone.",
+  "expectations": "The first week may feel effortful. By week 2, the cue starts triggering the behavior automatically."
 }
 
 This structured data powers the confirmation screen. The chat message itself should be SHORT—just the core recommendation + "Want to try this?"
+
+### Determining Habit Type
+
+Analyze the user's situation to determine the habit type:
+
+**time_anchored** — The behavior happens at a predictable time each day
+- Cue: Clock time or daily routine moment
+- Examples: "Read before bed", "Meditate at 7am", "Journal after dinner"
+- Key indicator: User mentions specific times or daily routines
+- Set \`anchorTime\` to the time (24h format, e.g., "22:00")
+
+**event_anchored** — The behavior is triggered by completing another action
+- Cue: Completion of an existing habit
+- Examples: "After I brush my teeth", "When I sit down at my desk"
+- Key indicator: User describes chaining onto existing behavior
+- No \`anchorTime\` needed — the anchor IS the event
+
+**reactive** — The behavior responds to an unpredictable trigger
+- Cue: Internal state or external event that may or may not occur on any given day
+- Examples: "When I wake up at 3am", "When I feel anxious", "When I get a craving"
+- Key indicator: Trigger is unpredictable — it may or may not happen
+- Set \`checkInTime\` to when we should ask about it (e.g., "08:00" for morning check-in about last night)
+
+**Default rule:** If ambiguous, default to \`time_anchored\`. Only use \`reactive\` when the trigger is clearly unpredictable.
 
 ### Identity, Setup, and Follow-up fields
 
@@ -141,6 +169,29 @@ When you recommend, also generate:
    - ["Refill water bottle for tomorrow"]
 
    These complete the ritual loop. If a task happens after EVERY rep, it's followUp, not setupChecklist.
+
+5. **habitType**: Required. One of: "time_anchored", "event_anchored", "reactive"
+   - Determines how check-ins work and what CTA the user sees
+   - See "Determining Habit Type" section above
+
+6. **anchorTime**: For time_anchored habits only. 24h format (e.g., "22:00", "07:30")
+   - When the habit should happen each day
+
+7. **checkInTime**: For reactive habits only. 24h format (e.g., "08:00")
+   - When to prompt the user to check in (e.g., morning after for sleep habits)
+
+8. **principle**: Required. One sentence of behavioral science explaining why this approach works.
+   - Connect to established psychology: cue-routine-reward, implementation intentions, environment design, etc.
+   - Examples:
+     - "Consistent cues build automatic associations faster than willpower alone."
+     - "Physical environment changes reduce the need for self-control."
+     - "Responding to triggers with a planned action rewires the automatic response."
+
+9. **expectations**: Required. What to expect in the first week (1-2 sentences).
+   - Set realistic expectations so users don't give up too early
+   - Examples:
+     - "The first week may feel effortful. By week 2, the cue starts triggering the behavior automatically."
+     - "Some nights you'll forget. That's expected—the recovery action keeps the pattern alive."
 
 ### Field notes:
 
@@ -221,6 +272,11 @@ export interface SetupItemInput {
 }
 
 /**
+ * Habit type determines how check-ins work
+ */
+export type HabitType = 'time_anchored' | 'event_anchored' | 'reactive';
+
+/**
  * Habit recommendation structure for confirmation screen
  *
  * Note: followUp maps to HabitSystem.then — these are recurring steps
@@ -236,6 +292,12 @@ export interface HabitRecommendation {
   identity: string; // "Someone who [identity]"
   identityBehaviors: string[]; // 3-5 observable behaviors
   setupChecklist: SetupItemInput[]; // ONE-TIME environment prep items only
+  // V0.6 additions - habit type and education
+  habitType: HabitType; // Required - determines check-in flow
+  anchorTime?: string; // For time_anchored: "22:00" format
+  checkInTime?: string; // For reactive: when to prompt check-in
+  principle: string; // Behavioral science insight
+  expectations: string; // What to expect in first week
 }
 
 /**

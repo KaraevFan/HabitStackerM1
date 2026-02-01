@@ -58,9 +58,9 @@ export default function ChatContainer({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[var(--bg-primary)]">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="flex-1 overflow-y-auto px-4 py-6 bg-[var(--bg-primary)]">
         {/* Show welcome message while loading initial greeting */}
         {state.messages.length === 0 && isLoading && streamingMessage === null && (
           <div className="flex justify-start mb-4">

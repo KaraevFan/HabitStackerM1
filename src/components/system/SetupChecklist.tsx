@@ -122,7 +122,7 @@ export default function SetupChecklist(props: SetupChecklistProps) {
                         item.notApplicable
                           ? 'bg-[var(--bg-tertiary)] border-[var(--bg-tertiary)]'
                           : item.completed
-                          ? 'bg-[var(--accent)] border-[var(--accent)]'
+                          ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)]'
                           : 'border-[var(--text-tertiary)]'
                       }`}
                     >

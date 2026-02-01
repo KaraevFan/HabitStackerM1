@@ -1,9 +1,11 @@
 'use client';
 
-import { RepLog } from '@/types/habit';
+import { RepLog, CheckIn, getCheckInState } from '@/types/habit';
 
 interface SevenDayDotsProps {
-  repLogs: RepLog[];
+  repLogs?: RepLog[];
+  checkIns?: CheckIn[];
+  isReactive?: boolean;
 }
 
 /**
@@ -21,29 +23,65 @@ function getDateString(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+type DotState = 'completed' | 'recovered' | 'missed' | 'no_trigger' | 'empty' | 'future';
+
 /**
- * Determine dot status for a given date
+ * Determine dot status for a given date using check-ins
  */
-function getDotStatus(
+function getDotStateFromCheckIn(
+  dateStr: string,
+  today: string,
+  checkInsByDate: Map<string, CheckIn>
+): DotState {
+  // Future dates
+  if (dateStr > today) {
+    return 'future';
+  }
+
+  const checkIn = checkInsByDate.get(dateStr);
+  if (!checkIn) {
+    return 'empty';
+  }
+
+  const state = getCheckInState(checkIn);
+
+  switch (state) {
+    case 'completed':
+      return 'completed';
+    case 'recovered':
+      return 'recovered';
+    case 'missed':
+      return 'missed';
+    case 'no_trigger':
+      return 'no_trigger';
+    default:
+      return 'empty';
+  }
+}
+
+/**
+ * Determine dot status for a given date using legacy repLogs
+ */
+function getDotStateFromRepLog(
   dateStr: string,
   today: string,
   repLogsByDate: Map<string, RepLog>
-): 'completed' | 'missed' | 'empty' | 'future' {
-  // Future dates (after today)
+): DotState {
+  // Future dates
   if (dateStr > today) {
     return 'future';
   }
 
   const log = repLogsByDate.get(dateStr);
   if (!log) {
-    // No data for this date
-    // If it's today and no log yet, show as empty (anticipation)
     return 'empty';
   }
 
-  // Has log - check type
-  if (log.type === 'done' || log.type === 'recovery') {
+  if (log.type === 'done') {
     return 'completed';
+  }
+  if (log.type === 'recovery') {
+    return 'recovered';
   }
   if (log.type === 'missed') {
     return 'missed';
@@ -53,20 +91,100 @@ function getDotStatus(
 }
 
 /**
+ * Get visual representation for dot state
+ */
+function getDotVisual(
+  state: DotState,
+  isReactive: boolean,
+  isToday: boolean
+): { symbol: string | null; className: string } {
+  const baseSize = isToday ? 'w-5 h-5' : 'w-4 h-4';
+  const smallSize = isToday ? 'w-3 h-3' : 'w-2 h-2';
+
+  if (isReactive) {
+    // Reactive habits: distinct symbols
+    switch (state) {
+      case 'no_trigger':
+        return {
+          symbol: '🌙',
+          className: `${baseSize} flex items-center justify-center text-sm`,
+        };
+      case 'completed':
+        return {
+          symbol: '✓',
+          className: `${baseSize} flex items-center justify-center rounded-full bg-[var(--accent-primary)] text-white text-xs font-bold`,
+        };
+      case 'recovered':
+        return {
+          symbol: '→',
+          className: `${baseSize} flex items-center justify-center rounded-full bg-[var(--accent-secondary)] text-white text-xs`,
+        };
+      case 'missed':
+        return {
+          symbol: '✗',
+          className: `${baseSize} flex items-center justify-center text-[var(--text-tertiary)] text-xs`,
+        };
+      default:
+        return {
+          symbol: null,
+          className: `${smallSize} rounded-full bg-[var(--bg-tertiary)]`,
+        };
+    }
+  } else {
+    // Time/event habits: simple dots
+    switch (state) {
+      case 'completed':
+      case 'recovered':
+        return {
+          symbol: null,
+          className: `${baseSize} rounded-full bg-[var(--accent-primary)]`,
+        };
+      case 'missed':
+        return {
+          symbol: null,
+          className: `${baseSize} rounded-full border-2 border-[var(--text-tertiary)]`,
+        };
+      default:
+        return {
+          symbol: null,
+          className: `${smallSize} rounded-full bg-[var(--bg-tertiary)]`,
+        };
+    }
+  }
+}
+
+/**
  * SevenDayDots - Visual 7-day rolling history
  * Shows rep completion status without streak framing
+ * Supports both legacy repLogs and new checkIns
  */
-export default function SevenDayDots({ repLogs }: SevenDayDotsProps) {
-  // Build a map of date strings to rep logs (most recent per day)
+export default function SevenDayDots({
+  repLogs = [],
+  checkIns = [],
+  isReactive = false,
+}: SevenDayDotsProps) {
+  // Build maps for lookup
+  const checkInsByDate = new Map<string, CheckIn>();
+  for (const checkIn of checkIns) {
+    const dateStr = checkIn.date;
+    // Keep the most recent for each day
+    const existing = checkInsByDate.get(dateStr);
+    if (!existing || checkIn.checkedInAt > existing.checkedInAt) {
+      checkInsByDate.set(dateStr, checkIn);
+    }
+  }
+
   const repLogsByDate = new Map<string, RepLog>();
   for (const log of repLogs) {
     const dateStr = log.timestamp.split('T')[0];
-    // Keep the most recent log for each day
     const existing = repLogsByDate.get(dateStr);
     if (!existing || log.timestamp > existing.timestamp) {
       repLogsByDate.set(dateStr, log);
     }
   }
+
+  // Prefer checkIns if available
+  const useCheckIns = checkIns.length > 0;
 
   // Generate last 7 days (including today)
   const today = new Date();
@@ -86,37 +204,37 @@ export default function SevenDayDots({ repLogs }: SevenDayDotsProps) {
   return (
     <div className="flex justify-center items-center gap-2">
       {days.map(({ dateStr, label }) => {
-        const status = getDotStatus(dateStr, todayStr, repLogsByDate);
+        const state = useCheckIns
+          ? getDotStateFromCheckIn(dateStr, todayStr, checkInsByDate)
+          : getDotStateFromRepLog(dateStr, todayStr, repLogsByDate);
+
         const isToday = dateStr === todayStr;
+        const visual = getDotVisual(state, isReactive, isToday);
 
         return (
           <div key={dateStr} className="flex flex-col items-center gap-1">
-            {/* Day label - show "Today" for current day */}
+            {/* Day label */}
             <span
               className={`text-xs ${
                 isToday
-                  ? 'font-semibold text-[var(--accent)]'
+                  ? 'font-semibold text-[var(--accent-primary)]'
                   : 'text-[var(--text-tertiary)]'
               }`}
             >
               {isToday ? 'Today' : label}
             </span>
 
-            {/* Dot */}
+            {/* Dot/Symbol */}
             <div
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                isToday ? 'ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-primary)]' : ''
+                isToday
+                  ? 'ring-2 ring-[var(--accent-primary)] ring-offset-1 ring-offset-[var(--bg-primary)]'
+                  : ''
               }`}
             >
-              {status === 'completed' && (
-                <div className={`rounded-full bg-[var(--accent)] ${isToday ? 'w-5 h-5' : 'w-4 h-4'}`} />
-              )}
-              {status === 'missed' && (
-                <div className={`rounded-full border-2 border-[var(--text-tertiary)] ${isToday ? 'w-5 h-5' : 'w-4 h-4'}`} />
-              )}
-              {(status === 'empty' || status === 'future') && (
-                <div className={`rounded-full bg-[var(--bg-tertiary)] ${isToday ? 'w-3 h-3' : 'w-2 h-2'}`} />
-              )}
+              <div className={visual.className}>
+                {visual.symbol}
+              </div>
             </div>
           </div>
         );

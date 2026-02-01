@@ -16,10 +16,11 @@ interface ConfirmationScreenProps {
 
 /**
  * Generate hero statement from anchor and action
- * Format: "When I [anchor], I [action]."
+ * Format: "When [anchor], I [action]."
+ * Handles both action anchors ("I brush my teeth") and event anchors ("my alarm goes off")
  */
 function generateHeroStatement(anchor: string, action: string): string {
-  // Clean anchor: remove "after", time qualifiers (tonight, today, etc.), and "you" → "I"
+  // Clean anchor: remove "after", time qualifiers (tonight, today, etc.)
   let cleanAnchor = anchor
     .replace(/^(after|when)\s+/i, '')
     .replace(/^(tonight|today|tomorrow|this evening|this morning)\s+/i, '')
@@ -27,7 +28,27 @@ function generateHeroStatement(anchor: string, action: string): string {
     .replace(/\byou\b/gi, 'I')
     .replace(/\byour\b/gi, 'my')
     .trim();
-  cleanAnchor = cleanAnchor.charAt(0).toLowerCase() + cleanAnchor.slice(1);
+
+  // Detect if anchor is a noun phrase (alarm, notification, event) vs action phrase (I do something)
+  // Noun phrase indicators: starts with time, contains "alarm", "notification", "reminder", or no verb
+  const isNounPhrase = /^(\d|my\s|the\s)|alarm|notification|reminder|timer|bell/i.test(cleanAnchor) &&
+    !/^(I|my)\s+(get|sit|wake|stand|finish|start|leave|arrive|come|go)/i.test(cleanAnchor);
+
+  if (isNounPhrase) {
+    // For noun phrases like "9pm alarm", prefix with "my" if not already present
+    if (!/^(my|the)\s/i.test(cleanAnchor)) {
+      cleanAnchor = `my ${cleanAnchor}`;
+    }
+    // Add "goes off" if it's an alarm/notification without a verb
+    if (/alarm|notification|reminder|timer|bell/i.test(cleanAnchor) && !/\b(goes|rings|sounds|fires)\b/i.test(cleanAnchor)) {
+      cleanAnchor = `${cleanAnchor} goes off`;
+    }
+  } else {
+    // For action phrases, ensure it starts with "I"
+    if (!/^I\s/i.test(cleanAnchor)) {
+      cleanAnchor = `I ${cleanAnchor.charAt(0).toLowerCase()}${cleanAnchor.slice(1)}`;
+    }
+  }
 
   // Clean up action - ensure it starts naturally, convert "you" to "I"
   let cleanAction = action
@@ -36,7 +57,7 @@ function generateHeroStatement(anchor: string, action: string): string {
     .trim();
   cleanAction = cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1);
 
-  return `When I ${cleanAnchor}, I ${cleanAction}.`;
+  return `When ${cleanAnchor}, I ${cleanAction}.`;
 }
 
 /**

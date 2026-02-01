@@ -16,6 +16,7 @@ import { IntakeAnalytics } from '@/lib/analytics/intakeAnalytics';
 interface UseIntakeAgentReturn {
   state: IntakeState;
   isLoading: boolean;
+  isHydrated: boolean;
   error: string | null;
   streamingMessage: string | null;
   sendMessage: (message: string) => Promise<void>;
@@ -30,12 +31,33 @@ interface UseIntakeAgentReturn {
  * Hook for managing the intake agent conversation with streaming support
  */
 export function useIntakeAgent(): UseIntakeAgentReturn {
-  const [state, setState] = useState<IntakeState>(() => initializeConversation());
+  // Start with empty state to avoid hydration mismatch
+  // (localStorage is only available on client)
+  const [state, setState] = useState<IntakeState>(() => ({
+    userGoal: null,
+    realLeverage: null,
+    currentPhase: 'discovery' as const,
+    turnCount: 0,
+    messages: [],
+    recommendation: null,
+    isComplete: false,
+    feltUnderstoodRating: null,
+    startedAt: '',
+    completedAt: null,
+  }));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Load from localStorage after hydration
+  useEffect(() => {
+    const loaded = initializeConversation();
+    setState(loaded);
+    setIsHydrated(true);
+  }, []);
 
   /**
    * Process streaming response from the API
@@ -353,6 +375,7 @@ export function useIntakeAgent(): UseIntakeAgentReturn {
   return {
     state,
     isLoading,
+    isHydrated,
     error,
     streamingMessage,
     sendMessage,

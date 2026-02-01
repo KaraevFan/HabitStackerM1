@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HabitSystem, getHabitEmoji, normalizeThenSteps } from '@/types/habit';
-import Button from '@/components/ui/Button';
 import EditBottomSheet from './EditBottomSheet';
 
 interface YourSystemScreenProps {
@@ -122,7 +121,7 @@ export default function YourSystemScreen({
               >
                 <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
-              Back to Plan
+              Today
             </button>
           </div>
         </div>
@@ -309,15 +308,15 @@ export default function YourSystemScreen({
             </button>
           </div>
 
-          {/* Why This Works (Collapsible) */}
-          {system.whyItFits && system.whyItFits.length > 0 && (
+          {/* Why This Works (Collapsible) - Layer 2 Education */}
+          {(system.whyItFits?.length || system.principle) && (
             <div className="rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] overflow-hidden">
               <button
                 onClick={() => setWhyExpanded(!whyExpanded)}
                 className="w-full px-6 py-4 flex items-center justify-between"
               >
-                <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                  Why This Works For You
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Why this approach works
                 </p>
                 <span className="text-[var(--text-tertiary)]">
                   {whyExpanded ? '▲' : '▼'}
@@ -325,32 +324,63 @@ export default function YourSystemScreen({
               </button>
 
               {whyExpanded && (
-                <div className="px-6 pb-6">
-                  <ul className="space-y-2">
-                    {system.whyItFits.map((reason, index) => (
-                      <li
-                        key={index}
-                        className="flex items-start gap-2 text-[var(--text-secondary)]"
-                      >
-                        <span className="text-[var(--text-tertiary)]">•</span>
-                        <span>{reason}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="px-6 pb-6 space-y-4">
+                  {/* The Principle - behavioral science insight */}
+                  {system.principle && (
+                    <div className="rounded-lg bg-[var(--bg-primary)] p-4">
+                      <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                        The Principle
+                      </p>
+                      <p className="text-[var(--text-primary)] italic">
+                        &ldquo;{system.principle}&rdquo;
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Why it fits your situation */}
+                  {system.whyItFits && system.whyItFits.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                        Why it fits your situation
+                      </p>
+                      <ul className="space-y-2">
+                        {system.whyItFits.map((reason, index) => (
+                          <li
+                            key={index}
+                            className="flex items-start gap-2 text-[var(--text-secondary)]"
+                          >
+                            <span className="text-[var(--text-tertiary)]">•</span>
+                            <span>{reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Expectations preview */}
+                  {system.expectations && (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+                        What to expect
+                      </p>
+                      <p className="text-sm text-[var(--text-secondary)]">
+                        {system.expectations}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Re-tune CTA */}
+          {/* Re-tune CTA - De-emphasized */}
           <div className="pt-4">
-            <Button
+            <button
               onClick={() => router.push('/tuneup')}
-              variant="secondary"
-              className="w-full"
+              className="w-full py-3 px-4 text-sm text-[var(--text-secondary)] border border-[var(--bg-tertiary)] rounded-lg hover:border-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
             >
               Re-tune your system
-            </Button>
+            </button>
           </div>
         </div>
       </div>

@@ -69,6 +69,7 @@ async function streamAnthropic(
 
   if (!response.ok) {
     const error = await response.text();
+    console.error('[Anthropic] API error:', response.status, error);
     throw new Error(`Anthropic API error: ${response.status} - ${error}`);
   }
 
@@ -250,6 +251,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Parse the full JSON response
+          console.log('[Intake] Full content received:', fullContent.substring(0, 500));
           const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             try {
@@ -269,6 +271,7 @@ export async function POST(request: NextRequest) {
               );
             }
           } else {
+            console.error('[Intake] No JSON found in content:', fullContent);
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ error: 'No JSON in response' })}\n\n`)
             );

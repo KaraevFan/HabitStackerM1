@@ -1,4 +1,18 @@
-import { HabitData, RepEvent, RepLog, HabitSystem, createInitialHabitData, ConsultStep, PlanDetails, HabitSnapshot, generateRepLogId } from "@/types/habit";
+import {
+  HabitData,
+  RepEvent,
+  RepLog,
+  HabitSystem,
+  CheckIn,
+  CheckInState,
+  createInitialHabitData,
+  ConsultStep,
+  PlanDetails,
+  HabitSnapshot,
+  generateRepLogId,
+  generateCheckInId,
+  getCheckInState,
+} from "@/types/habit";
 
 const STORAGE_KEY = "habit-stacker-data";
 
@@ -160,7 +174,8 @@ export function needsRecovery(): boolean {
 }
 
 /**
- * Log a rep with optional photo (R8)
+ * @deprecated Use logCheckIn() instead. This function writes to the legacy repLogs array.
+ * Kept temporarily for any remaining old code paths.
  */
 export function logRep(
   type: RepLog["type"],
@@ -305,4 +320,238 @@ export function markSetupItemNA(itemId: string): HabitData {
   };
 
   return updateHabitData({ system });
+}
+
+// ============================================
+// LOGGING SYSTEM FUNCTIONS
+// ============================================
+
+/**
+ * Log a check-in for today
+ *
+ * This is the PRIMARY way to log habit completions/misses.
+ * All habits (time-anchored, event-anchored, reactive) use this function.
+ * For time/event habits, triggerOccurred defaults to true.
+ */
+export function logCheckIn(
+  checkInData: Omit<CheckIn, 'id' | 'checkedInAt'>
+): HabitData {
+  const current = loadHabitData();
+  const today = new Date().toISOString().split('T')[0];
+
+  const checkIn: CheckIn = {
+    ...checkInData,
+    id: generateCheckInId(),
+    checkedInAt: new Date().toISOString(),
+    date: today,
+  };
+
+  // Add to check-ins array
+  const checkIns = [...(current.checkIns || []), checkIn];
+
+  const updates: Partial<HabitData> = {
+    checkIns,
+    lastActiveDate: new Date().toISOString(),
+  };
+
+  // Update state/counts based on check-in state
+  const state = getCheckInState(checkIn);
+
+  if (state === 'completed' || state === 'recovered') {
+    updates.repsCount = current.repsCount + 1;
+    updates.lastDoneDate = today;
+    updates.state = 'active';
+    updates.missedDate = null;
+  } else if (state === 'missed') {
+    updates.state = 'missed';
+    updates.missedDate = today;
+  }
+  // 'no_trigger' doesn't change state/counts but is still valuable data
+
+  return updateHabitData(updates);
+}
+
+/**
+ * Get today's check-in if it exists
+ */
+export function getTodayCheckIn(): CheckIn | null {
+  const current = loadHabitData();
+  const today = new Date().toISOString().split('T')[0];
+  return current.checkIns?.find((c) => c.date === today) || null;
+}
+
+/**
+ * Get today's check-in state
+ */
+export function getTodayCheckInState(): CheckInState {
+  const checkIn = getTodayCheckIn();
+  if (!checkIn) return 'pending';
+  return getCheckInState(checkIn);
+}
+
+/**
+ * Get check-ins for the last N days
+ */
+export function getRecentCheckIns(days: number = 7): CheckIn[] {
+  const current = loadHabitData();
+  if (!current.checkIns) return [];
+
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+
+  return current.checkIns
+    .filter((c) => c.date >= cutoffStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Get check-ins for current week (last 7 days)
+ */
+export function getWeekCheckIns(): CheckIn[] {
+  return getRecentCheckIns(7);
+}
+
+/**
+ * Accept recovery offer (mark recovery as accepted)
+ */
+export function acceptRecovery(): HabitData {
+  const current = loadHabitData();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Find today's check-in
+  const checkIns = current.checkIns?.map((c) =>
+    c.date === today ? { ...c, recoveryAccepted: true } : c
+  ) || [];
+
+  return updateHabitData({ checkIns });
+}
+
+/**
+ * Complete recovery action
+ */
+export function completeRecovery(): HabitData {
+  const current = loadHabitData();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Find today's check-in and mark recovery completed
+  const checkIns = current.checkIns?.map((c) =>
+    c.date === today ? { ...c, recoveryCompleted: true } : c
+  ) || [];
+
+  // Update state
+  const updates: Partial<HabitData> = {
+    checkIns,
+    state: 'active',
+    missedDate: null,
+    repsCount: current.repsCount + 1,
+    lastDoneDate: today,
+  };
+
+  return updateHabitData(updates);
+}
+
+/**
+ * Update today's check-in with additional data (e.g., difficulty rating)
+ */
+export function updateTodayCheckIn(
+  updates: Partial<Pick<CheckIn, 'difficultyRating' | 'note' | 'outcomeSuccess' | 'missReason'>>
+): HabitData {
+  const current = loadHabitData();
+  const today = new Date().toISOString().split('T')[0];
+
+  const checkIns = current.checkIns?.map((c) =>
+    c.date === today ? { ...c, ...updates } : c
+  ) || [];
+
+  return updateHabitData({ checkIns });
+}
+
+/**
+ * Get count of check-ins by state for a period
+ */
+export function getCheckInStats(days: number = 7): {
+  completed: number;
+  missed: number;
+  noTrigger: number;
+  recovered: number;
+  total: number;
+} {
+  const checkIns = getRecentCheckIns(days);
+
+  const stats = {
+    completed: 0,
+    missed: 0,
+    noTrigger: 0,
+    recovered: 0,
+    total: checkIns.length,
+  };
+
+  for (const checkIn of checkIns) {
+    const state = getCheckInState(checkIn);
+    if (state === 'completed') stats.completed++;
+    else if (state === 'missed') stats.missed++;
+    else if (state === 'no_trigger') stats.noTrigger++;
+    else if (state === 'recovered') stats.recovered++;
+  }
+
+  return stats;
+}
+
+/**
+ * Update check-in conversation data (V0.6)
+ */
+export function updateCheckInConversation(
+  checkInId: string,
+  conversation: {
+    messages?: Array<{ role: 'ai' | 'user'; content: string }>;
+    skipped?: boolean;
+    duration?: number;
+  }
+): HabitData {
+  const current = loadHabitData();
+
+  const checkIns = current.checkIns?.map((c) =>
+    c.id === checkInId
+      ? {
+          ...c,
+          conversation: {
+            messages: conversation.messages || c.conversation?.messages || [],
+            skipped: conversation.skipped ?? c.conversation?.skipped ?? false,
+            duration: conversation.duration ?? c.conversation?.duration ?? 0,
+          },
+        }
+      : c
+  ) || [];
+
+  return updateHabitData({ checkIns });
+}
+
+/**
+ * Update today's check-in conversation (V0.6)
+ */
+export function updateTodayConversation(
+  conversation: {
+    messages?: Array<{ role: 'ai' | 'user'; content: string }>;
+    skipped?: boolean;
+    duration?: number;
+  }
+): HabitData {
+  const current = loadHabitData();
+  const today = new Date().toISOString().split('T')[0];
+
+  const checkIns = current.checkIns?.map((c) =>
+    c.date === today
+      ? {
+          ...c,
+          conversation: {
+            messages: conversation.messages || c.conversation?.messages || [],
+            skipped: conversation.skipped ?? c.conversation?.skipped ?? false,
+            duration: conversation.duration ?? c.conversation?.duration ?? 0,
+          },
+        }
+      : c
+  ) || [];
+
+  return updateHabitData({ checkIns });
 }

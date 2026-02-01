@@ -5,6 +5,92 @@
 export type HabitState = "install" | "designed" | "active" | "missed" | "recovery";
 
 /**
+ * Habit type taxonomy (Logging System)
+ * Determines check-in flow and outcome interpretation
+ */
+export type HabitType = 'time_anchored' | 'event_anchored' | 'reactive';
+
+/**
+ * Check-in state for a given day
+ */
+export type CheckInState =
+  | 'pending'           // Check-in window open, not yet logged
+  | 'no_trigger'        // For reactive: slept through / no opportunity
+  | 'completed'         // Action was taken
+  | 'missed'            // Trigger occurred but action not taken
+  | 'recovered';        // Miss + recovery action completed
+
+/**
+ * Check-in record for the logging system
+ * Captures what happened, not just "did you do it"
+ */
+export interface CheckIn {
+  id: string;
+  date: string;                // YYYY-MM-DD
+  checkedInAt: string;         // ISO timestamp
+
+  // What happened
+  triggerOccurred: boolean;    // Did the anchor/trigger happen?
+  actionTaken: boolean;        // Did they do the behavior?
+
+  // Reactive habit specifics
+  triggerTime?: string;        // "02:30" - when did the trigger occur?
+  outcomeSuccess?: boolean;    // Did the protocol work? (e.g., fell back asleep)
+
+  // Context for pattern finding
+  missReason?: string;         // Why they didn't act (if miss)
+  contextTags?: string[];      // "weekend", "travel", "stressed", "sick"
+
+  // Qualitative (optional)
+  note?: string;               // Free-form user note
+  difficultyRating?: 1 | 2 | 3 | 4 | 5;  // How hard was it today?
+
+  // Recovery tracking
+  recoveryOffered: boolean;
+  recoveryAccepted?: boolean;
+  recoveryCompleted?: boolean;
+
+  // Difficulty rating (1-5 scale)
+  difficulty?: 1 | 2 | 3 | 4 | 5;
+
+  // Conversation data (V0.6)
+  conversation?: {
+    messages: Array<{ role: 'ai' | 'user'; content: string }>;
+    skipped: boolean;
+    duration: number; // seconds
+  };
+}
+
+/**
+ * Generate a unique ID for check-ins
+ */
+export function generateCheckInId(): string {
+  return `checkin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Compute check-in state from a CheckIn record
+ */
+export function getCheckInState(checkIn: CheckIn): CheckInState {
+  // No trigger (for reactive habits) - this is valid data
+  if (!checkIn.triggerOccurred) {
+    return 'no_trigger';
+  }
+
+  // Trigger occurred but action not taken
+  if (!checkIn.actionTaken) {
+    // Check if recovery was completed
+    if (checkIn.recoveryCompleted) {
+      return 'recovered';
+    }
+    return 'missed';
+  }
+
+  // Action was taken
+  return 'completed';
+}
+
+/**
  * Available domains for habit design
  */
 export type HabitDomain = "health" | "finances" | "home" | "relationships" | "learning";
@@ -169,6 +255,15 @@ export interface HabitSystem {
   recovery: string;
   whyItFits: string[]; // Personalized reasons from conversation
 
+  // Habit type (Logging System)
+  habitType?: HabitType; // 'time_anchored' | 'event_anchored' | 'reactive'
+  anchorTime?: string;   // For time-anchored: "07:00"
+  checkInTime?: string;  // For reactive: when to ask "how was last night?" (default: "07:00")
+
+  // Education content (Layer 2 - Expandable Rationale)
+  principle?: string;    // The science behind this habit (1-2 sentences)
+  expectations?: string; // What to expect week by week
+
   // Identity (V0.5 - generated during intake)
   identity?: string; // "Someone who protects their sleep"
   identityBehaviors?: string[]; // ["Has a clear shutdown signal", ...]
@@ -286,6 +381,9 @@ export interface HabitData {
   repLogs?: RepLog[]; // Enhanced rep logs with photos
   feltUnderstoodRating?: number; // 1-5 rating from confirmation
   hasCompletedFirstRepWithPhoto?: boolean; // Unlocks tune-up
+
+  // Logging System additions
+  checkIns?: CheckIn[]; // New check-in records
 }
 
 /**
@@ -319,6 +417,8 @@ export function createInitialHabitData(): HabitData {
     // R8 additions
     repLogs: [],
     hasCompletedFirstRepWithPhoto: false,
+    // Logging System
+    checkIns: [],
   };
 }
 
