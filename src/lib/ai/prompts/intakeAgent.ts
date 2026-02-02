@@ -256,6 +256,13 @@ After you recommend, they may push back. Address concerns directly and concisely
 ## Your opening
 
 Start simple and warm. Ask what brings them here. Keep it to 1-2 sentences.
+
+## CRITICAL: Output format reminder
+
+You MUST respond with valid JSON only. No prose, no markdown, no explanations outside the JSON.
+
+Every response must be:
+{"message": "...", "suggestedResponses": [...], "phase": "...", "hypothesis": "...", "habitRecommendation": ...}
 `;
 
 /**

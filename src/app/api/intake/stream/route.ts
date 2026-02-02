@@ -2,8 +2,37 @@ import { NextRequest } from 'next/server';
 import {
   INTAKE_AGENT_SYSTEM_PROMPT,
   IntakeAgentResponse,
-  isValidIntakeResponse,
 } from '@/lib/ai/prompts/intakeAgent';
+
+/**
+ * Validate intake response with detailed error message
+ */
+function validateIntakeResponse(response: unknown): { valid: boolean; reason?: string } {
+  if (typeof response !== 'object' || response === null) {
+    return { valid: false, reason: 'Response is not an object' };
+  }
+
+  const r = response as Record<string, unknown>;
+
+  if (typeof r.message !== 'string') {
+    return { valid: false, reason: `message is ${typeof r.message}, expected string` };
+  }
+  if (r.suggestedResponses !== null && !Array.isArray(r.suggestedResponses)) {
+    return { valid: false, reason: `suggestedResponses is ${typeof r.suggestedResponses}, expected array or null` };
+  }
+  const validPhases = ['discovery', 'reflection', 'recommendation', 'refinement', 'ready_to_start'];
+  if (!validPhases.includes(r.phase as string)) {
+    return { valid: false, reason: `phase "${r.phase}" is not valid (expected: ${validPhases.join(', ')})` };
+  }
+  if (r.hypothesis !== null && typeof r.hypothesis !== 'string') {
+    return { valid: false, reason: `hypothesis is ${typeof r.hypothesis}, expected string or null` };
+  }
+  if (r.habitRecommendation !== null && typeof r.habitRecommendation !== 'object') {
+    return { valid: false, reason: `habitRecommendation is ${typeof r.habitRecommendation}, expected object or null` };
+  }
+
+  return { valid: true };
+}
 
 interface IntakeRequest {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -256,24 +285,51 @@ export async function POST(request: NextRequest) {
           if (jsonMatch) {
             try {
               const agentResponse = JSON.parse(jsonMatch[0]) as IntakeAgentResponse;
-              if (isValidIntakeResponse(agentResponse)) {
+              const validationResult = validateIntakeResponse(agentResponse);
+              if (validationResult.valid) {
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({ done: true, response: agentResponse })}\n\n`)
                 );
               } else {
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ error: 'Invalid response format' })}\n\n`)
-                );
+                console.error('[Intake] Invalid response:', validationResult.reason, JSON.stringify(agentResponse).substring(0, 300));
+                // Try to salvage: if we have a message, use it
+                if (typeof agentResponse.message === 'string') {
+                  const fallback: IntakeAgentResponse = {
+                    message: agentResponse.message,
+                    suggestedResponses: Array.isArray(agentResponse.suggestedResponses) ? agentResponse.suggestedResponses : null,
+                    phase: ['discovery', 'reflection', 'recommendation', 'refinement', 'ready_to_start'].includes(agentResponse.phase as string)
+                      ? agentResponse.phase
+                      : 'discovery',
+                    hypothesis: typeof agentResponse.hypothesis === 'string' ? agentResponse.hypothesis : null,
+                    habitRecommendation: agentResponse.habitRecommendation || null,
+                  };
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ done: true, response: fallback })}\n\n`)
+                  );
+                } else {
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ error: `Invalid response: ${validationResult.reason}` })}\n\n`)
+                  );
+                }
               }
-            } catch {
+            } catch (parseError) {
+              console.error('[Intake] JSON parse error:', parseError, jsonMatch[0].substring(0, 200));
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ error: 'Failed to parse response JSON' })}\n\n`)
               );
             }
           } else {
-            console.error('[Intake] No JSON found in content:', fullContent);
+            // AI returned plain text instead of JSON - wrap it as a discovery response
+            console.warn('[Intake] No JSON found, wrapping plain text:', fullContent.substring(0, 100));
+            const fallbackResponse: IntakeAgentResponse = {
+              message: fullContent.trim(),
+              suggestedResponses: null,
+              phase: 'discovery',
+              hypothesis: null,
+              habitRecommendation: null,
+            };
             controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ error: 'No JSON in response' })}\n\n`)
+              encoder.encode(`data: ${JSON.stringify({ done: true, response: fallbackResponse })}\n\n`)
             );
           }
 
