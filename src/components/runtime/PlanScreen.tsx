@@ -6,8 +6,12 @@ import Button from "@/components/ui/Button";
 import IdentitySection from "@/components/self/IdentitySection";
 import ProgressionSection from "@/components/self/ProgressionSection";
 import SetupChecklist from "@/components/system/SetupChecklist";
-import { HabitData, getPlanScreenState, getHabitEmoji, getSetupProgress, normalizeThenSteps } from "@/types/habit";
+import MonthCalendar from "@/components/journey/MonthCalendar";
+import DayTimeline from "@/components/journey/DayTimeline";
+import PatternsSection from "@/components/journey/PatternsSection";
+import { HabitData, getPlanScreenState, getHabitEmoji, getSetupProgress, normalizeThenSteps, CheckIn } from "@/types/habit";
 import { toggleSetupItem, markSetupItemNA } from "@/lib/store/habitStore";
+import { analyzePatterns } from "@/lib/patterns/patternFinder";
 
 interface PlanScreenProps {
   habitData: HabitData;
@@ -75,6 +79,7 @@ function getProgressDotState(
 export default function PlanScreen({ habitData: initialHabitData }: PlanScreenProps) {
   const [habitData, setHabitData] = useState(initialHabitData);
   const [activeTab, setActiveTab] = useState<TabId>(null);
+  const [selectedJourneyDate, setSelectedJourneyDate] = useState<string | null>(null);
 
   const { snapshot, planDetails, system, repsCount, lastDoneDate, createdAt } = habitData;
 
@@ -263,7 +268,7 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
       )}
 
       {/* Setup nudge - Lower priority */}
-      {(isPreFirstRep || hasIncompleteSetup) && setupProgress.total > 0 && activeTab !== 'system' && (
+      {hasIncompleteSetup && setupProgress.total > 0 && activeTab !== 'system' && (
         <button
           onClick={() => setActiveTab('system')}
           className="nudge-card"
@@ -320,20 +325,34 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
       )}
 
       {activeTab === 'journey' && (
-        <div className="tab-content">
-          <div className="content-section">
-            <p className="section-label">Your Progress</p>
-            <div className="journey-stats">
-              <div>
-                <p className="journey-stat-value">{repsCount}</p>
-                <p className="journey-stat-label">Total reps</p>
-              </div>
-              <div>
-                <p className="journey-stat-value">{formatLastDone(lastDoneDate)}</p>
-                <p className="journey-stat-label">Last done</p>
-              </div>
-            </div>
-          </div>
+        <div className="tab-content journey-tab">
+          {/* Month Calendar */}
+          <MonthCalendar
+            checkIns={habitData.checkIns || []}
+            startDate={createdAt.split('T')[0]}
+            onDaySelect={(date) => setSelectedJourneyDate(date)}
+          />
+
+          <div className="divider" />
+
+          {/* Day Timeline */}
+          <DayTimeline
+            checkIns={habitData.checkIns || []}
+            selectedDate={selectedJourneyDate}
+            onDayClick={(checkIn) => setSelectedJourneyDate(checkIn.date)}
+          />
+
+          {/* Patterns Section - after 7+ check-ins */}
+          {(habitData.checkIns?.length || 0) >= 7 && (
+            <>
+              <div className="divider" />
+              <PatternsSection
+                patterns={analyzePatterns(habitData.checkIns || [], system?.habitType || 'time_anchored')}
+                system={system!}
+                habitType={system?.habitType || 'time_anchored'}
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -693,6 +712,11 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
           font-size: 12px;
           color: var(--text-tertiary);
           margin: 0;
+        }
+
+        .journey-tab {
+          max-height: 60vh;
+          overflow-y: auto;
         }
 
         /* Science section */
