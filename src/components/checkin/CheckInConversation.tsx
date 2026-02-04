@@ -8,6 +8,7 @@ import {
   generateConversationResponse,
 } from '@/lib/checkin/conversationGenerator';
 import { ReflectionContext, ReflectionAgentResponse, ReflectionSummary } from '@/lib/ai/prompts/reflectionAgent';
+import { RecoveryCoachContext, RecoveryCoachResponse } from '@/lib/ai/prompts/recoveryCoachAgent';
 
 interface Message {
   role: 'ai' | 'user';
@@ -20,6 +21,10 @@ export interface ConversationData {
   duration: number;
   frictionNotes?: string[]; // Track any friction mentioned
   reflection?: ReflectionSummary; // AI-extracted summary for timeline
+  // Recovery-specific fields (R16)
+  recoveryAccepted?: boolean;
+  missReason?: string;
+  systemChangeProposed?: { field: string; suggestion: string } | null;
 }
 
 interface CheckInConversationProps {
@@ -31,12 +36,30 @@ interface CheckInConversationProps {
   realLeverage?: string | null; // The blocker from intake
   onComplete: (conversation: ConversationData) => void;
   onSkip: () => void;
+  // Mode: reflection (default) or recovery (R16)
+  mode?: 'reflection' | 'recovery';
 }
+
+// Mode-dependent config
+const MODE_CONFIG = {
+  reflection: {
+    apiEndpoint: '/api/reflection/stream',
+    headerText: 'Quick check-in',
+    closeButtonText: 'Done reflecting',
+    minExchangesForClose: 1,
+  },
+  recovery: {
+    apiEndpoint: '/api/recovery/stream',
+    headerText: "Let's talk about today",
+    closeButtonText: 'Got it, thanks',
+    minExchangesForClose: 2,
+  },
+} as const;
 
 /**
  * Brief chat interface after check-in
- * Uses AI for personalized, engaging responses (R13)
- * Falls back to rule-based generation if API fails
+ * Supports both reflection (post-success) and recovery (post-miss) modes
+ * Uses AI for personalized responses, falls back to rule-based if API fails
  */
 export default function CheckInConversation({
   checkIn,
@@ -46,7 +69,10 @@ export default function CheckInConversation({
   realLeverage,
   onComplete,
   onSkip,
+  mode = 'reflection',
 }: CheckInConversationProps) {
+  const config = MODE_CONFIG[mode];
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [suggestedReplies, setSuggestedReplies] = useState<string[]>([]);
@@ -56,15 +82,26 @@ export default function CheckInConversation({
   const [frictionNotes, setFrictionNotes] = useState<string[]>([]);
   const [readyToClose, setReadyToClose] = useState(false);
   const latestSummaryRef = useRef<ReflectionSummary | undefined>(undefined);
-  const closingDataRef = useRef<{ allMessages: Message[]; summary?: ReflectionSummary } | null>(null);
-  const [useAI, setUseAI] = useState(true); // Toggle for AI vs rule-based
+  const closingDataRef = useRef<{
+    allMessages: Message[];
+    summary?: ReflectionSummary;
+    recoveryAccepted?: boolean;
+    missReason?: string;
+    systemChangeProposed?: { field: string; suggestion: string } | null;
+  } | null>(null);
+  const [useAI, setUseAI] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Recovery-specific refs to persist across exchanges
+  const recoveryAcceptedRef = useRef(false);
+  const missReasonRef = useRef<string | undefined>(undefined);
+  const systemChangeProposedRef = useRef<{ field: string; suggestion: string } | null>(null);
+
   /**
-   * Build context for the reflection API
+   * Build context for the API call (same shape for both modes)
    */
-  const buildContext = useCallback((): ReflectionContext => {
+  const buildContext = useCallback((): ReflectionContext | RecoveryCoachContext => {
     return {
       checkIn,
       patterns,
@@ -77,29 +114,44 @@ export default function CheckInConversation({
   }, [checkIn, patterns, system, userGoal, realLeverage, exchangeCount, messages]);
 
   /**
-   * Call the reflection API
+   * Call the conversation API (reflection or recovery based on mode)
    */
-  const callReflectionAPI = useCallback(async (
-    context: ReflectionContext,
+  const callConversationAPI = useCallback(async (
+    context: ReflectionContext | RecoveryCoachContext,
     userMessage?: string
-  ): Promise<ReflectionAgentResponse | null> => {
+  ): Promise<ReflectionAgentResponse | RecoveryCoachResponse | null> => {
     try {
-      const response = await fetch('/api/reflection/stream', {
+      const response = await fetch(config.apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ context, userMessage }),
       });
 
       if (!response.ok) {
-        console.error('[CheckInConversation] API error:', response.status);
+        console.error(`[CheckInConversation:${mode}] API error:`, response.status);
         return null;
       }
 
       const data = await response.json();
-      return data as ReflectionAgentResponse;
+      return data;
     } catch (error) {
-      console.error('[CheckInConversation] API call failed:', error);
+      console.error(`[CheckInConversation:${mode}] API call failed:`, error);
       return null;
+    }
+  }, [config.apiEndpoint, mode]);
+
+  /**
+   * Extract recovery-specific fields from a response
+   */
+  const extractRecoveryFields = useCallback((response: RecoveryCoachResponse) => {
+    if (response.recoveryAccepted) {
+      recoveryAcceptedRef.current = true;
+    }
+    if (response.missReason) {
+      missReasonRef.current = response.missReason;
+    }
+    if (response.systemChangeProposed) {
+      systemChangeProposedRef.current = response.systemChangeProposed;
     }
   }, []);
 
@@ -111,7 +163,7 @@ export default function CheckInConversation({
 
     if (useAI) {
       const context = buildContext();
-      const aiResponse = await callReflectionAPI(context);
+      const aiResponse = await callConversationAPI(context);
 
       if (aiResponse) {
         setMessages([{ role: 'ai', content: aiResponse.message }]);
@@ -121,11 +173,16 @@ export default function CheckInConversation({
         if (aiResponse.frictionNote) {
           setFrictionNotes(prev => [...prev, aiResponse.frictionNote!]);
         }
+
+        // Extract recovery fields if in recovery mode
+        if (mode === 'recovery') {
+          extractRecoveryFields(aiResponse as RecoveryCoachResponse);
+        }
         return;
       }
 
       // AI failed, fall back to rule-based
-      console.log('[CheckInConversation] AI failed, using rule-based opener');
+      console.log(`[CheckInConversation:${mode}] AI failed, using rule-based opener`);
       setUseAI(false);
     }
 
@@ -134,11 +191,10 @@ export default function CheckInConversation({
     setMessages([{ role: 'ai', content: opener.message }]);
     setSuggestedReplies(opener.suggestedReplies);
     setIsTyping(false);
-  }, [useAI, buildContext, callReflectionAPI, checkIn, patterns, system]);
+  }, [useAI, buildContext, callConversationAPI, checkIn, patterns, system, mode, extractRecoveryFields]);
 
   // Generate opening message on mount
   useEffect(() => {
-    // Small delay for natural feel
     const timer = setTimeout(() => {
       generateOpening();
     }, 400);
@@ -173,7 +229,7 @@ export default function CheckInConversation({
 
     if (useAI) {
       // Build context with updated messages
-      const context: ReflectionContext = {
+      const context = {
         checkIn,
         patterns,
         system,
@@ -183,7 +239,7 @@ export default function CheckInConversation({
         previousMessages: [...messages, userMsg],
       };
 
-      const aiResponse = await callReflectionAPI(context, trimmedContent);
+      const aiResponse = await callConversationAPI(context, trimmedContent);
 
       if (aiResponse) {
         aiMsg = { role: 'ai', content: aiResponse.message };
@@ -194,14 +250,20 @@ export default function CheckInConversation({
           setFrictionNotes(prev => [...prev, aiResponse.frictionNote!]);
         }
 
-        // Capture reflection summary (persist across exchanges via ref)
-        if (aiResponse.reflectionSummary) {
-          reflectionSummary = aiResponse.reflectionSummary;
-          latestSummaryRef.current = aiResponse.reflectionSummary;
+        if (mode === 'reflection') {
+          // Capture reflection summary
+          const reflectionResponse = aiResponse as ReflectionAgentResponse;
+          if (reflectionResponse.reflectionSummary) {
+            reflectionSummary = reflectionResponse.reflectionSummary;
+            latestSummaryRef.current = reflectionResponse.reflectionSummary;
+          }
+        } else {
+          // Extract recovery fields
+          extractRecoveryFields(aiResponse as RecoveryCoachResponse);
         }
       } else {
         // AI failed, fall back to rule-based
-        console.log('[CheckInConversation] AI failed for response, using rule-based');
+        console.log(`[CheckInConversation:${mode}] AI failed for response, using rule-based`);
         const response = generateConversationResponse(
           trimmedContent,
           checkIn,
@@ -231,12 +293,20 @@ export default function CheckInConversation({
     setIsTyping(false);
     setExchangeCount(prev => prev + 1);
 
-    // When ready to close, show "Done reflecting" button instead of auto-transitioning
-    if (shouldClose || exchangeCount >= 1) {
+    // When ready to close, show close button
+    // Reflection mode: close when AI says so OR after minimum exchanges (brief by design)
+    // Recovery mode: only close when AI says shouldClose (conversation needs room to breathe)
+    const shouldShowClose = mode === 'recovery'
+      ? shouldClose
+      : (shouldClose || exchangeCount >= config.minExchangesForClose);
+    if (shouldShowClose) {
       const finalSummary = reflectionSummary || latestSummaryRef.current;
       closingDataRef.current = {
         allMessages: [...messages, userMsg, aiMsg],
         summary: finalSummary,
+        recoveryAccepted: recoveryAcceptedRef.current,
+        missReason: missReasonRef.current,
+        systemChangeProposed: systemChangeProposedRef.current,
       };
       setReadyToClose(true);
     } else {
@@ -244,7 +314,8 @@ export default function CheckInConversation({
     }
   }, [
     isTyping, useAI, checkIn, patterns, system, userGoal, realLeverage,
-    exchangeCount, messages, callReflectionAPI, frictionNotes, startTime, onComplete
+    exchangeCount, messages, callConversationAPI, mode, config.minExchangesForClose,
+    extractRecoveryFields,
   ]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -261,7 +332,7 @@ export default function CheckInConversation({
     });
   };
 
-  const handleDoneReflecting = () => {
+  const handleDoneConversation = () => {
     const data = closingDataRef.current;
     onComplete({
       messages: data?.allMessages || messages,
@@ -269,6 +340,10 @@ export default function CheckInConversation({
       duration: Math.round((Date.now() - startTime) / 1000),
       frictionNotes: frictionNotes.length > 0 ? frictionNotes : undefined,
       reflection: data?.summary,
+      // Recovery-specific fields
+      recoveryAccepted: data?.recoveryAccepted,
+      missReason: data?.missReason,
+      systemChangeProposed: data?.systemChangeProposed,
     });
   };
 
@@ -276,7 +351,7 @@ export default function CheckInConversation({
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
       {/* Header */}
       <div className="flex-shrink-0 px-6 pt-8 pb-4">
-        <p className="text-[var(--text-tertiary)] text-sm">Quick check-in</p>
+        <p className="text-[var(--text-tertiary)] text-sm">{config.headerText}</p>
       </div>
 
       {/* Messages area */}
@@ -334,15 +409,15 @@ export default function CheckInConversation({
         </div>
       )}
 
-      {/* Bottom area: either "Done reflecting" or input */}
+      {/* Bottom area: either close button or input */}
       <div className="flex-shrink-0 px-6 pb-6 pt-2 border-t border-[var(--border-primary)]">
         {readyToClose ? (
           <>
             <button
-              onClick={handleDoneReflecting}
+              onClick={handleDoneConversation}
               className="w-full py-3 rounded-full bg-[var(--accent-primary)] text-white font-medium text-base hover:opacity-90 active:opacity-80 transition-opacity"
             >
-              Done reflecting
+              {config.closeButtonText}
             </button>
             <button
               onClick={handleSkip}

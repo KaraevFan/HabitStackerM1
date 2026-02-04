@@ -5,6 +5,16 @@ import { useRouter } from 'next/navigation';
 import { HabitSystem, getHabitEmoji, normalizeThenSteps } from '@/types/habit';
 import EditBottomSheet from './EditBottomSheet';
 
+/**
+ * Format 24h time string to 12h format
+ */
+function formatTime(time24: string): string {
+  const [hours, minutes] = time24.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+
 interface YourSystemScreenProps {
   system: HabitSystem;
   onUpdateSystem: (updates: Partial<HabitSystem>) => void;
@@ -191,6 +201,22 @@ export default function YourSystemScreen({
                 </>
               )}
             </div>
+
+            {/* Reminder time if set */}
+            {system.reminderTime && (
+              <div className="mt-4 pt-4 border-t border-[var(--bg-tertiary)]">
+                <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                  <span>⏰</span>
+                  <span>
+                    Daily reminder: {formatTime(system.reminderTime)}
+                    {system.reminderLabel && ` "${system.reminderLabel}"`}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                  Push notifications coming soon
+                </p>
+              </div>
+            )}
 
             {/* Edit link */}
             <div className="mt-4 pt-4 border-t border-[var(--bg-tertiary)] flex justify-end">

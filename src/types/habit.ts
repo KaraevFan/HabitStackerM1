@@ -59,6 +59,21 @@ export interface CheckIn {
     skipped: boolean;
     duration: number; // seconds
   };
+
+  // AI-extracted reflection summary (populated when conversation closes)
+  reflection?: {
+    summary: string;           // Key insight from conversation, e.g. "Spent ¥10,400, above target"
+    quantitative?: string;     // Extracted number/value if any, e.g. "¥10,400"
+    sentiment?: 'positive' | 'neutral' | 'challenging';
+    frictionNote?: string;     // If user mentioned a blocker
+  };
+
+  // System change proposed during recovery conversation (R16)
+  systemChangeProposed?: {
+    field: 'anchor' | 'time' | 'action' | 'recovery';
+    suggestion: string;
+    accepted: boolean;
+  };
 }
 
 /**
@@ -279,6 +294,10 @@ export interface HabitSystem {
   // Metadata
   tunedAt?: string; // ISO date when tune-up completed
   tuneCount?: number; // How many times user has re-tuned
+
+  // Reminder settings (R14 - data model now, push notifications later)
+  reminderTime?: string;  // "20:00" - extracted from intake conversation
+  reminderLabel?: string; // "Money check" - label for the reminder
 }
 
 /**

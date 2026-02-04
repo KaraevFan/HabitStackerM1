@@ -99,7 +99,9 @@ Respond with JSON:
   "habitType": "time_anchored",
   "anchorTime": "22:10",
   "principle": "Consistent cues build automatic associations faster than willpower alone.",
-  "expectations": "The first week may feel effortful. By week 2, the cue starts triggering the behavior automatically."
+  "expectations": "The first week may feel effortful. By week 2, the cue starts triggering the behavior automatically.",
+  "reminderTime": "22:10",
+  "reminderLabel": "Sleep prep"
 }
 
 This structured data powers the confirmation screen. The chat message itself should be SHORT—just the core recommendation + "Want to try this?"
@@ -192,6 +194,16 @@ When you recommend, also generate:
    - Examples:
      - "The first week may feel effortful. By week 2, the cue starts triggering the behavior automatically."
      - "Some nights you'll forget. That's expected—the recovery action keeps the pattern alive."
+
+10. **reminderTime**: Optional. 24h format (e.g., "20:00")
+    - If the user mentions a specific time for their habit ("I want to do it at 8pm", "alarm at 7:30")
+    - Extract and include this for future reminder functionality
+    - Only include if user explicitly mentions a time
+
+11. **reminderLabel**: Optional. Short label (2-4 words)
+    - A brief label for the reminder, derived from the habit
+    - Examples: "Money check", "Spending review", "Sleep prep", "Morning stretch"
+    - Should be recognizable at a glance on a phone notification
 
 ### Field notes:
 
@@ -305,6 +317,9 @@ export interface HabitRecommendation {
   checkInTime?: string; // For reactive: when to prompt check-in
   principle: string; // Behavioral science insight
   expectations: string; // What to expect in first week
+  // R14 additions - reminder data (captured for future notifications)
+  reminderTime?: string; // "20:00" - when to remind user
+  reminderLabel?: string; // Short label for the reminder, e.g. "Money check"
 }
 
 /**

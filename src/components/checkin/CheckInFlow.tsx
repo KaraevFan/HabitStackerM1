@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { HabitSystem, CheckIn, HabitData, getCheckInState } from '@/types/habit';
+import { IntakeState } from '@/types/conversation';
 import {
   logCheckIn,
   updateTodayCheckIn,
@@ -25,12 +26,13 @@ import RecoveryOffer from './RecoveryOffer';
 import CheckInConversation, { ConversationData } from './CheckInConversation';
 
 type FlowStep =
-  | 'options'       // For reactive: 3-option selector
-  | 'success'       // Success screen with whisper + difficulty
-  | 'conversation'  // Brief chat after success/no-trigger (V0.6)
-  | 'miss_reason'   // Capture why they missed
-  | 'recovery'      // Offer recovery action
-  | 'done';         // Complete, redirect
+  | 'options'                // For reactive: 3-option selector
+  | 'success'                // Success screen with whisper + difficulty
+  | 'conversation'           // Brief chat after success/no-trigger (V0.6)
+  | 'recovery_conversation'  // Recovery coach conversation after miss (R16)
+  | 'miss_reason'            // Capture why they missed (legacy, kept for fallback)
+  | 'recovery'               // Offer recovery action (legacy, kept for fallback)
+  | 'done';                  // Complete, redirect
 
 interface CheckInFlowProps {
   system: HabitSystem;
@@ -55,7 +57,7 @@ export default function CheckInFlow({
   // Determine initial step based on entry mode
   // ALL habits now go through options screen (different options per type)
   const getInitialStep = (): FlowStep => {
-    if (entryMode === 'miss') return 'miss_reason';
+    if (entryMode === 'miss') return 'recovery_conversation';
     return 'options'; // Both reactive and time/event show options
   };
 
@@ -69,8 +71,29 @@ export default function CheckInFlow({
   // Store the logged check-in for conversation
   const [loggedCheckIn, setLoggedCheckIn] = useState<CheckIn | null>(null);
 
+  // Track whether we already had a conversation (recovery or reflection) — skip the second one
+  const [hadConversation, setHadConversation] = useState(false);
+
   // Pattern analysis for conversation
   const [patterns, setPatterns] = useState<CheckInPatterns | null>(null);
+
+  // Intake context for personalized reflection (R13)
+  const [intakeContext, setIntakeContext] = useState<{
+    userGoal: string | null;
+    realLeverage: string | null;
+  }>({ userGoal: null, realLeverage: null });
+
+  // Load intake context on mount
+  useEffect(() => {
+    const habitData = loadHabitData();
+    if (habitData.intakeState) {
+      const intakeState = habitData.intakeState as IntakeState;
+      setIntakeContext({
+        userGoal: intakeState.userGoal || null,
+        realLeverage: intakeState.realLeverage || null,
+      });
+    }
+  }, []);
 
   // For success screen content
   const [successContent, setSuccessContent] = useState({
@@ -159,8 +182,10 @@ export default function CheckInFlow({
   };
 
   const handleMissed = () => {
-    setCheckInData(prev => ({ ...prev, triggerOccurred: true, actionTaken: false }));
-    setStep('miss_reason');
+    const data = { triggerOccurred: true, actionTaken: false, recoveryOffered: true };
+    setCheckInData(prev => ({ ...prev, ...data }));
+    finalizeCheckIn(data, 'missed');
+    setStep('recovery_conversation');
   };
 
   // Handle miss reason selection
@@ -213,8 +238,13 @@ export default function CheckInFlow({
     handleDone();
   };
 
-  // Handle success screen done - go to conversation
+  // Handle success screen done - go to conversation (unless we already had one)
   const handleSuccessDone = () => {
+    // Skip reflection conversation if we already did a recovery conversation
+    if (hadConversation) {
+      handleDone();
+      return;
+    }
     // If we have a logged check-in, go to conversation
     if (loggedCheckIn) {
       setStep('conversation');
@@ -235,6 +265,62 @@ export default function CheckInFlow({
     updateTodayConversation({ skipped: true, messages: [], duration: 0 });
     handleDone();
   };
+
+  // Handle recovery conversation completion (R16)
+  const handleRecoveryConversationComplete = (conversation: ConversationData) => {
+    // Mark that we've already had a conversation (don't route to reflection after success)
+    setHadConversation(true);
+
+    // Store conversation with today's check-in
+    updateTodayConversation(conversation);
+
+    // Store miss reason if AI extracted one
+    if (conversation.missReason) {
+      updateTodayCheckIn({ missReason: conversation.missReason });
+    }
+
+    // Store system change proposal if any
+    if (conversation.systemChangeProposed) {
+      updateTodayCheckIn({
+        systemChangeProposed: {
+          field: conversation.systemChangeProposed.field as 'anchor' | 'time' | 'action' | 'recovery',
+          suggestion: conversation.systemChangeProposed.suggestion,
+          accepted: false,
+        },
+      });
+    }
+
+    // If recovery was accepted in conversation, trigger recovery flow
+    if (conversation.recoveryAccepted) {
+      acceptRecovery();
+      completeRecovery();
+      setSuccessContent({
+        title: 'Recovery logged.',
+        subtitle: "You're still in the game.",
+        whisper: {
+          content: "You did the recovery. That's not a consolation prize — it's you signaling to your brain that you're still committed.",
+          type: 'encouragement',
+        },
+      });
+      setStep('success');
+    } else {
+      handleDone();
+    }
+  };
+
+  // Handle recovery conversation skip (R16)
+  const handleRecoveryConversationSkip = () => {
+    updateTodayConversation({ skipped: true, messages: [], duration: 0 });
+    handleDone();
+  };
+
+  // When entering directly in miss mode, finalize the check-in
+  useEffect(() => {
+    if (entryMode === 'miss' && !loggedCheckIn) {
+      const data = { triggerOccurred: true, actionTaken: false, recoveryOffered: true };
+      finalizeCheckIn(data, 'missed');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Note: All habits now go through options screen, so no auto-logging needed
   // The user explicitly chooses Done/Missed, which triggers the appropriate handlers
@@ -287,6 +373,8 @@ export default function CheckInFlow({
             checkIn={loggedCheckIn}
             patterns={patterns}
             system={system}
+            userGoal={intakeContext.userGoal}
+            realLeverage={intakeContext.realLeverage}
             onComplete={handleConversationComplete}
             onSkip={handleConversationSkip}
           />
@@ -294,6 +382,25 @@ export default function CheckInFlow({
       }
       // Fallback if no check-in data
       handleDone();
+      return null;
+
+    case 'recovery_conversation':
+      // Recovery coach conversation after miss (R16)
+      if (loggedCheckIn) {
+        return (
+          <CheckInConversation
+            mode="recovery"
+            checkIn={loggedCheckIn}
+            patterns={patterns}
+            system={system}
+            userGoal={intakeContext.userGoal}
+            realLeverage={intakeContext.realLeverage}
+            onComplete={handleRecoveryConversationComplete}
+            onSkip={handleRecoveryConversationSkip}
+          />
+        );
+      }
+      // Fallback if check-in not yet finalized (e.g., entryMode='miss' still loading)
       return null;
 
     case 'miss_reason':

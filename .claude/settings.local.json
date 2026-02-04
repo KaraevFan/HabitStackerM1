@@ -14,7 +14,20 @@
       "Bash(cd /Users/tomoyukikano/Desktop/My\\\\ Projects/HabitStacker/M1_Web_App && npm run dev:*)",
       "Bash(kill:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx eslint:*)",
+      "Bash(timeout 10 npm run dev:*)",
+      "Bash(git push)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git status -uall)",
+      "Bash(git rm:*)",
+      "Bash(pkill:*)",
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

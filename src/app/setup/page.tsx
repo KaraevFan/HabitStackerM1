@@ -45,6 +45,9 @@ function recommendationToSystem(
     checkInTime: rec.checkInTime,
     principle: rec.principle,
     expectations: rec.expectations,
+    // R14: Reminder settings (data model now, notifications later)
+    reminderTime: rec.reminderTime,
+    reminderLabel: rec.reminderLabel,
   };
 }
 

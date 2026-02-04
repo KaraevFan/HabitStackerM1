@@ -339,6 +339,29 @@ export function logCheckIn(
   const current = loadHabitData();
   const today = new Date().toISOString().split('T')[0];
 
+  // Guard: if today already has a check-in, update it instead of creating a duplicate
+  const existingToday = (current.checkIns || []).find(c => c.date === today);
+  if (existingToday) {
+    const checkIns = (current.checkIns || []).map(c =>
+      c.id === existingToday.id ? { ...c, ...checkInData, date: today } : c
+    );
+    const state = getCheckInState({ ...existingToday, ...checkInData });
+    const updates: Partial<HabitData> = {
+      checkIns,
+      lastActiveDate: new Date().toISOString(),
+    };
+    if (state === 'completed' || state === 'recovered') {
+      updates.repsCount = current.repsCount + 1;
+      updates.lastDoneDate = today;
+      updates.state = 'active';
+      updates.missedDate = null;
+    } else if (state === 'missed') {
+      updates.state = 'missed';
+      updates.missedDate = today;
+    }
+    return updateHabitData(updates);
+  }
+
   const checkIn: CheckIn = {
     ...checkInData,
     id: generateCheckInId(),
@@ -455,7 +478,7 @@ export function completeRecovery(): HabitData {
  * Update today's check-in with additional data (e.g., difficulty rating)
  */
 export function updateTodayCheckIn(
-  updates: Partial<Pick<CheckIn, 'difficultyRating' | 'note' | 'outcomeSuccess' | 'missReason'>>
+  updates: Partial<Pick<CheckIn, 'difficultyRating' | 'note' | 'outcomeSuccess' | 'missReason' | 'systemChangeProposed'>>
 ): HabitData {
   const current = loadHabitData();
   const today = new Date().toISOString().split('T')[0];
@@ -535,6 +558,12 @@ export function updateTodayConversation(
     messages?: Array<{ role: 'ai' | 'user'; content: string }>;
     skipped?: boolean;
     duration?: number;
+    reflection?: {
+      summary: string;
+      quantitative?: string;
+      sentiment?: 'positive' | 'neutral' | 'challenging';
+      frictionNote?: string;
+    };
   }
 ): HabitData {
   const current = loadHabitData();
@@ -549,6 +578,8 @@ export function updateTodayConversation(
             skipped: conversation.skipped ?? c.conversation?.skipped ?? false,
             duration: conversation.duration ?? c.conversation?.duration ?? 0,
           },
+          // Store AI-extracted reflection summary
+          reflection: conversation.reflection || c.reflection,
         }
       : c
   ) || [];
