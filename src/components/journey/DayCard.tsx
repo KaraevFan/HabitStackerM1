@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { CheckIn, getCheckInState, CheckInState } from '@/types/habit';
 
 interface DayCardProps {
@@ -32,7 +31,19 @@ function formatDate(dateStr: string, isToday: boolean): string {
 }
 
 /**
- * Get status display info
+ * Format check-in time
+ */
+function formatTime(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/**
+ * Get status display info — using CSS variables consistently
  */
 function getStatusDisplay(state: CheckInState): {
   label: string;
@@ -43,11 +54,11 @@ function getStatusDisplay(state: CheckInState): {
     case 'completed':
       return { label: 'Done', icon: '✓', color: 'text-[var(--accent-primary)]' };
     case 'recovered':
-      return { label: 'Recovered', icon: '↩', color: 'text-[var(--accent-secondary)]' };
+      return { label: 'Recovered', icon: '↩', color: 'text-[var(--accent-primary)]' };
     case 'missed':
-      return { label: 'Missed', icon: '—', color: 'text-red-400' };
+      return { label: 'Missed', icon: '—', color: 'text-[var(--error)]' };
     case 'no_trigger':
-      return { label: 'No trigger', icon: '🌙', color: 'text-blue-400' };
+      return { label: 'Skipped', icon: '○', color: 'text-[var(--warning)]' };
     default:
       return { label: 'Pending', icon: '○', color: 'text-[var(--text-tertiary)]' };
   }
@@ -60,7 +71,7 @@ function getReflectionDisplay(checkIn: CheckIn): string | null {
   // First priority: AI-extracted reflection summary
   if (checkIn.reflection?.summary) {
     const summary = checkIn.reflection.summary;
-    return summary.length > 80 ? summary.substring(0, 80) + '...' : summary;
+    return summary.length > 60 ? summary.substring(0, 60) + '...' : summary;
   }
 
   // Second priority: user note
@@ -117,26 +128,18 @@ function DifficultyDots({ rating }: { rating: number }) {
 
 /**
  * DayCard - Individual day entry in the timeline
+ * Tapping opens DayDetailSheet (no inline expansion)
  */
 export default function DayCard({ checkIn, isToday = false, onClick }: DayCardProps) {
-  const [expanded, setExpanded] = useState(false);
   const state = getCheckInState(checkIn);
   const status = getStatusDisplay(state);
   const difficulty = checkIn.difficulty || checkIn.difficultyRating;
   const reflection = getReflectionDisplay(checkIn);
   const sentiment = checkIn.reflection?.sentiment;
-  const hasConversation = checkIn.conversation?.messages && checkIn.conversation.messages.length > 0;
-
-  const handleClick = () => {
-    if (hasConversation) {
-      setExpanded(prev => !prev);
-    }
-    onClick?.();
-  };
 
   return (
     <button
-      onClick={handleClick}
+      onClick={onClick}
       className={`
         w-full text-left p-4 rounded-xl border transition-all
         ${isToday
@@ -145,21 +148,19 @@ export default function DayCard({ checkIn, isToday = false, onClick }: DayCardPr
         }
       `}
     >
-      {/* Header: Date + Status */}
+      {/* Header: Date + Status + Time */}
       <div className="flex items-center justify-between mb-2">
-        <span className={`font-medium ${isToday ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-          {formatDate(checkIn.date, isToday)}
-        </span>
         <div className="flex items-center gap-2">
-          <div className={`flex items-center gap-1.5 text-sm ${status.color}`}>
-            <span>{status.icon}</span>
-            <span>{status.label}</span>
-          </div>
-          {hasConversation && (
-            <span className={`text-xs text-[var(--text-tertiary)] transition-transform ${expanded ? 'rotate-180' : ''}`}>
-              ▾
-            </span>
-          )}
+          <span className={`font-medium ${isToday ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+            {formatDate(checkIn.date, isToday)}
+          </span>
+          <span className="text-xs text-[var(--text-tertiary)]">
+            at {formatTime(checkIn.checkedInAt)}
+          </span>
+        </div>
+        <div className={`flex items-center gap-1.5 text-sm ${status.color}`}>
+          <span>{status.icon}</span>
+          <span>{status.label}</span>
         </div>
       </div>
 
@@ -172,8 +173,8 @@ export default function DayCard({ checkIn, isToday = false, onClick }: DayCardPr
           </div>
         )}
 
-        {/* Reflection snippet with sentiment indicator - hide when expanded */}
-        {reflection && !expanded && (
+        {/* Reflection snippet with sentiment indicator */}
+        {reflection && (
           <div className="flex items-start gap-2">
             {sentiment && (
               <span className="flex-shrink-0 mt-0.5">
@@ -185,28 +186,6 @@ export default function DayCard({ checkIn, isToday = false, onClick }: DayCardPr
             <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
               {reflection}
             </p>
-          </div>
-        )}
-
-        {/* Expanded: full conversation thread */}
-        {expanded && hasConversation && (
-          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] space-y-2">
-            {checkIn.conversation!.messages.map((msg, i) => (
-              <div
-                key={i}
-                className={msg.role === 'ai' ? 'flex justify-start' : 'flex justify-end'}
-              >
-                <div
-                  className={`max-w-[85%] px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'ai'
-                      ? 'bg-[var(--bg-tertiary)] rounded-[12px_12px_12px_4px] text-[var(--text-primary)]'
-                      : 'bg-[var(--accent-primary)] rounded-[12px_12px_4px_12px] text-white'
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { CheckIn, getCheckInState } from '@/types/habit';
 interface MonthCalendarProps {
   checkIns: CheckIn[];
   startDate: string; // ISO date when habit was created
+  selectedDate?: string | null;
   onDaySelect?: (date: string) => void;
 }
 
@@ -51,6 +52,19 @@ function getDayStatus(
 }
 
 /**
+ * Check if a check-in has a reflection/note
+ */
+function hasReflection(checkIn: CheckIn): boolean {
+  if (checkIn.reflection?.summary) return true;
+  if (checkIn.note) return true;
+  if (checkIn.conversation?.messages) {
+    const userMessages = checkIn.conversation.messages.filter(m => m.role === 'user');
+    if (userMessages.length > 0) return true;
+  }
+  return false;
+}
+
+/**
  * Format date for display
  */
 function formatMonthYear(date: Date): string {
@@ -90,10 +104,12 @@ function toDateString(date: Date): string {
 
 /**
  * MonthCalendar - Calendar grid showing habit completion history
+ * 4-state dots: Done (filled teal), Recovered (outlined teal), Skipped (outlined amber), Missed (small red)
  */
 export default function MonthCalendar({
   checkIns,
   startDate,
+  selectedDate,
   onDaySelect,
 }: MonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -145,13 +161,6 @@ export default function MonthCalendar({
   const canGoNext =
     currentMonth.year < now.getFullYear() ||
     (currentMonth.year === now.getFullYear() && currentMonth.month < now.getMonth());
-
-  // Format start date for display
-  const startDateFormatted = new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 
   return (
     <div className="space-y-4">
@@ -210,7 +219,10 @@ export default function MonthCalendar({
           const dateStr = toDateString(date);
           const status = getDayStatus(dateStr, today, startDate, checkInsByDate);
           const isToday = dateStr === today;
+          const isSelected = dateStr === selectedDate;
           const isSelectable = status !== 'future' && status !== 'before_start';
+          const checkIn = checkInsByDate.get(dateStr);
+          const hasNote = checkIn ? hasReflection(checkIn) : false;
 
           return (
             <button
@@ -222,6 +234,7 @@ export default function MonthCalendar({
                 transition-all text-sm
                 ${isSelectable ? 'hover:bg-[var(--bg-secondary)]' : ''}
                 ${isToday ? 'ring-2 ring-[var(--accent-primary)] ring-inset' : ''}
+                ${isSelected ? 'bg-[var(--accent-subtle)]' : ''}
               `}
             >
               {/* Day number */}
@@ -235,37 +248,47 @@ export default function MonthCalendar({
                 {date.getDate()}
               </span>
 
-              {/* Status indicator dot */}
-              {status !== 'future' && status !== 'before_start' && status !== 'empty' && (
-                <div
-                  className={`
-                    absolute bottom-1 left-1/2 -translate-x-1/2
-                    w-1.5 h-1.5 rounded-full
-                    ${status === 'completed' ? 'bg-[var(--accent-primary)]' : ''}
-                    ${status === 'recovered' ? 'bg-[var(--accent-secondary)]' : ''}
-                    ${status === 'missed' ? 'bg-red-400' : ''}
-                    ${status === 'no_trigger' ? 'bg-blue-300' : ''}
-                  `}
-                />
+              {/* Status indicator dot — 4-state system */}
+              {status === 'completed' && (
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)]" />
+              )}
+              {status === 'recovered' && (
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full border-[1.5px] border-[var(--accent-primary)] bg-transparent" />
+              )}
+              {status === 'no_trigger' && (
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full border-[1.5px] border-[var(--warning)] bg-transparent" />
+              )}
+              {status === 'missed' && (
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--error)]" />
+              )}
+
+              {/* Note indicator — small amber dot in top-right */}
+              {hasNote && (
+                <div className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-[var(--warning)]" />
               )}
             </button>
           );
         })}
       </div>
 
-      {/* Legend and start date */}
-      <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)] px-2 pt-2">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)]" />
-            <span>Done</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-red-400" />
-            <span>Missed</span>
-          </div>
+      {/* Legend — 4-state */}
+      <div className="flex items-center justify-center gap-4 text-xs text-[var(--text-tertiary)] px-2 pt-2">
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)]" />
+          <span>Done</span>
         </div>
-        <div>Started: {startDateFormatted}</div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full border-[1.5px] border-[var(--accent-primary)] bg-transparent" />
+          <span>Recovered</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-2 rounded-full border-[1.5px] border-[var(--warning)] bg-transparent" />
+          <span>Skipped</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-[var(--error)]" />
+          <span>Missed</span>
+        </div>
       </div>
     </div>
   );

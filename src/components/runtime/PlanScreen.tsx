@@ -9,6 +9,8 @@ import SetupChecklist from "@/components/system/SetupChecklist";
 import MonthCalendar from "@/components/journey/MonthCalendar";
 import DayTimeline from "@/components/journey/DayTimeline";
 import PatternsSection from "@/components/journey/PatternsSection";
+import NarrativeHeader from "@/components/journey/NarrativeHeader";
+import DayDetailSheet from "@/components/journey/DayDetailSheet";
 import { HabitData, getPlanScreenState, getHabitEmoji, getSetupProgress, normalizeThenSteps, CheckIn } from "@/types/habit";
 import { toggleSetupItem, markSetupItemNA } from "@/lib/store/habitStore";
 import { analyzePatterns } from "@/lib/patterns/patternFinder";
@@ -80,6 +82,8 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
   const [habitData, setHabitData] = useState(initialHabitData);
   const [activeTab, setActiveTab] = useState<TabId>(null);
   const [selectedJourneyDate, setSelectedJourneyDate] = useState<string | null>(null);
+  const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
+  const [dayDetailCheckIn, setDayDetailCheckIn] = useState<CheckIn | null>(null);
 
   const { snapshot, planDetails, system, repsCount, lastDoneDate, createdAt } = habitData;
 
@@ -148,6 +152,23 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
   // Toggle tab
   const handleTabClick = (tabId: TabId) => {
     setActiveTab(activeTab === tabId ? null : tabId);
+  };
+
+  // Open day detail sheet for a given date
+  const openDayDetail = (date: string) => {
+    setSelectedJourneyDate(date);
+    // Look up check-in for that date
+    const checkIns = habitData.checkIns || [];
+    const checkIn = checkIns
+      .filter(c => c.date === date)
+      .sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt))[0] || null;
+    setDayDetailDate(date);
+    setDayDetailCheckIn(checkIn);
+  };
+
+  const closeDayDetail = () => {
+    setDayDetailDate(null);
+    setDayDetailCheckIn(null);
   };
 
   // Check if setup checklist is incomplete
@@ -326,11 +347,20 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
 
       {activeTab === 'journey' && (
         <div className="tab-content journey-tab">
+          {/* Narrative Header — Momentum ring + insight */}
+          <NarrativeHeader
+            checkIns={habitData.checkIns || []}
+            startDate={createdAt.split('T')[0]}
+          />
+
+          <div className="divider" />
+
           {/* Month Calendar */}
           <MonthCalendar
             checkIns={habitData.checkIns || []}
             startDate={createdAt.split('T')[0]}
-            onDaySelect={(date) => setSelectedJourneyDate(date)}
+            selectedDate={selectedJourneyDate}
+            onDaySelect={openDayDetail}
           />
 
           <div className="divider" />
@@ -339,7 +369,7 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
           <DayTimeline
             checkIns={habitData.checkIns || []}
             selectedDate={selectedJourneyDate}
-            onDayClick={(checkIn) => setSelectedJourneyDate(checkIn.date)}
+            onDayClick={openDayDetail}
           />
 
           {/* Patterns Section - after 7+ check-ins */}
@@ -353,6 +383,14 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
               />
             </>
           )}
+
+          {/* Day Detail Bottom Sheet */}
+          <DayDetailSheet
+            isOpen={!!dayDetailDate}
+            onClose={closeDayDetail}
+            checkIn={dayDetailCheckIn}
+            date={dayDetailDate}
+          />
         </div>
       )}
 
