@@ -16,9 +16,9 @@ export default function ResetPage() {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
       <div className="text-center">
-        <p className="text-lg text-zinc-600 dark:text-zinc-400">
+        <p className="text-lg text-[var(--text-secondary)]">
           {done ? "Data cleared. Redirecting..." : "Clearing data..."}
         </p>
       </div>

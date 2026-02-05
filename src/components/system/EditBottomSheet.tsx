@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Button from '@/components/ui/Button';
 
 interface EditBottomSheetProps {
@@ -36,6 +36,22 @@ export default function EditBottomSheet({
     }
   }, [isOpen, initialValue]);
 
+  // Lock body scroll and handle Escape key
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen, handleKeyDown]);
+
   const handleSave = () => {
     if (value.trim()) {
       onSave(value.trim());
@@ -43,13 +59,10 @@ export default function EditBottomSheet({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSave();
-    }
-    if (e.key === 'Escape') {
-      onClose();
     }
   };
 
@@ -59,13 +72,19 @@ export default function EditBottomSheet({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
+        className="fixed inset-0 bg-[var(--overlay)] z-[var(--z-overlay)] transition-opacity"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Sheet */}
-      <div className="fixed inset-x-0 bottom-0 z-50 animate-slide-up">
-        <div className="bg-[var(--bg-primary)] rounded-t-2xl shadow-lg">
+      <div
+        className="fixed inset-x-0 bottom-0 z-[var(--z-sheet)] animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="bg-[var(--bg-primary)] rounded-t-2xl shadow-lg safe-area-bottom">
           {/* Drag Handle */}
           <div className="flex justify-center py-3">
             <div className="w-10 h-1 bg-[var(--bg-tertiary)] rounded-full" />
@@ -87,10 +106,10 @@ export default function EditBottomSheet({
               ref={inputRef}
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleInputKeyDown}
               placeholder={placeholder}
               rows={3}
-              className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--bg-tertiary)] rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-opacity-50 resize-none"
+              className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--bg-tertiary)] rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:ring-opacity-50 resize-none"
             />
 
             {/* Actions */}
@@ -113,20 +132,6 @@ export default function EditBottomSheet({
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(100%);
-          }
-          to {
-            transform: translateY(0);
-          }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
     </>
   );
 }

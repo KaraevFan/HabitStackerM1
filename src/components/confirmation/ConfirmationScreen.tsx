@@ -127,7 +127,7 @@ export default function ConfirmationScreen({
   const hasSetupChecklist = setupItems.length > 0;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-primary)]">
+    <div className="flex flex-col min-h-dvh bg-[var(--bg-primary)]">
       {/* Header */}
       <div className="px-4 py-4">
         <button

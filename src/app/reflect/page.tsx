@@ -55,7 +55,7 @@ export default function ReflectPage() {
 
   if (isLoading || !habitData) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
         <p className="text-[var(--text-tertiary)]">Loading...</p>
       </div>
     );
@@ -164,7 +164,7 @@ export default function ReflectPage() {
   switch (step) {
     case 'summary':
       return (
-        <div className="min-h-screen bg-[var(--bg-primary)] px-6 py-8">
+        <div className="min-h-dvh bg-[var(--bg-primary)] px-6 py-8">
           <div className="max-w-md mx-auto">
             {/* Header */}
             <p className="text-sm text-[var(--text-tertiary)] mb-2">
@@ -244,7 +244,7 @@ export default function ReflectPage() {
 
     case 'sustainability':
       return (
-        <div className="min-h-screen bg-[var(--bg-primary)] px-6 py-8">
+        <div className="min-h-dvh bg-[var(--bg-primary)] px-6 py-8">
           <div className="max-w-md mx-auto">
             <p className="text-sm text-[var(--text-tertiary)] mb-2">Question 1 of 2</p>
             <h1 className="font-display text-2xl font-bold text-[var(--text-primary)] mb-8">
@@ -293,7 +293,7 @@ export default function ReflectPage() {
 
     case 'friction':
       return (
-        <div className="min-h-screen bg-[var(--bg-primary)] px-6 py-8">
+        <div className="min-h-dvh bg-[var(--bg-primary)] px-6 py-8">
           <div className="max-w-md mx-auto">
             <p className="text-sm text-[var(--text-tertiary)] mb-2">Question 2 of 2</p>
             <h1 className="font-display text-2xl font-bold text-[var(--text-primary)] mb-2">
@@ -330,7 +330,7 @@ export default function ReflectPage() {
 
     case 'recommendation':
       return (
-        <div className="min-h-screen bg-[var(--bg-primary)] px-6 py-8">
+        <div className="min-h-dvh bg-[var(--bg-primary)] px-6 py-8">
           <div className="max-w-md mx-auto">
             <p className="text-sm text-[var(--text-tertiary)] mb-2">My suggestion</p>
             <h1 className="font-display text-2xl font-bold text-[var(--text-primary)] mb-8">
@@ -372,7 +372,7 @@ export default function ReflectPage() {
 
     case 'complete':
       return (
-        <div className="min-h-screen bg-[var(--bg-primary)] px-6 py-8 flex flex-col items-center justify-center">
+        <div className="min-h-dvh bg-[var(--bg-primary)] px-6 py-8 flex flex-col items-center justify-center">
           <div className="max-w-md mx-auto text-center">
             <div className="w-16 h-16 rounded-full bg-[var(--accent-primary)] flex items-center justify-center mx-auto mb-6">
               <span className="text-white text-2xl">✓</span>

@@ -27,7 +27,12 @@
   --success: #3D7A5A;
   --success-subtle: #E8F5ED;
   --warning: #B5872A;
+  --warning-subtle: #F5F0E2;
   --error: #A65D5D;
+  --error-subtle: #F5E8E8;
+
+  /* Overlay */
+  --overlay: rgba(26, 24, 22, 0.4);
 
   /* AI-specific */
   --ai-message-bg: #F7F4EE;
@@ -39,6 +44,10 @@
   --duration-normal: 0.2s;
   --duration-slow: 0.3s;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Z-index scale */
+  --z-overlay: 40;
+  --z-sheet: 50;
 
   /* Legacy mappings for compatibility */
   --background: var(--bg-primary);
@@ -65,7 +74,11 @@ html.dark {
   --success: #5B9B78;
   --success-subtle: #1E3025;
   --warning: #D4A84B;
+  --warning-subtle: #302A1E;
   --error: #C87878;
+  --error-subtle: #301E1E;
+
+  --overlay: rgba(0, 0, 0, 0.5);
 
   --ai-message-bg: #242220;
   --user-message-bg: #2D6A5D;
@@ -96,6 +109,12 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-fraunces), 'Fraunces', Georgia, serif;
   letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* Body text wrapping */
+p {
+  text-wrap: pretty;
 }
 
 /* ============================================
@@ -125,13 +144,36 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* Bottom sheet entrance */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 /* Utility classes for animations */
-.animate-message-enter {
-  animation: message-enter 0.3s var(--ease-out);
+@media (prefers-reduced-motion: no-preference) {
+  .animate-message-enter {
+    animation: message-enter 0.3s var(--ease-out);
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.3s var(--ease-out);
+  }
 }
 
 .animate-typing-pulse {
   animation: typing-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-typing-pulse {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 
 /* iOS safe area support */
@@ -147,7 +189,7 @@ h1, h2, h3, h4, h5, h6 {
 .app-frame {
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-primary);
   position: relative;
 }
@@ -162,7 +204,7 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: 24px;
     margin-top: 24px;
     margin-bottom: 24px;
-    min-height: calc(100vh - 48px);
+    min-height: calc(100dvh - 48px);
     overflow: hidden;
   }
 }

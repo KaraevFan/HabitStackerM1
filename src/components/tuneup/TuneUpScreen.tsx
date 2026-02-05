@@ -73,7 +73,7 @@ export default function TuneUpScreen({
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-primary)]">
+    <div className="flex flex-col min-h-dvh bg-[var(--bg-primary)]">
       {/* Header */}
       <div className="px-4 py-4 border-b border-[var(--bg-tertiary)]">
         <div className="flex items-center justify-between">

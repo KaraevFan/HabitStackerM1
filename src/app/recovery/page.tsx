@@ -37,8 +37,8 @@ export default function RecoveryPage() {
 
   if (isLoading || !habitData?.planDetails) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500">Loading...</p>
+      <div className="flex min-h-dvh items-center justify-center">
+        <p className="text-[var(--text-tertiary)]">Loading...</p>
       </div>
     );
   }
@@ -46,36 +46,36 @@ export default function RecoveryPage() {
   const { planDetails } = habitData;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-dvh bg-[var(--bg-primary)]">
       <div className="mx-auto max-w-lg px-4 py-8">
         <div className="space-y-8">
           {/* Header */}
           <div className="text-center">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">You missed yesterday</p>
-            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+            <p className="text-sm text-[var(--text-tertiary)]">You missed yesterday</p>
+            <h1 className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">
               Quick recovery
             </h1>
           </div>
 
           {/* Encouragement */}
-          <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800 p-5 text-center">
-            <p className="text-zinc-700 dark:text-zinc-300">
+          <div className="rounded-xl bg-[var(--bg-secondary)] p-5 text-center">
+            <p className="text-[var(--text-secondary)]">
               Missing happens. What matters is getting back on track quickly.
             </p>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
               Do this tiny action to restore your continuity.
             </p>
           </div>
 
           {/* Recovery Action */}
-          <div className="rounded-xl border-2 border-zinc-900 bg-white p-6 dark:border-zinc-100 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
+          <div className="rounded-xl border-2 border-[var(--text-primary)] bg-[var(--bg-primary)] p-6">
+            <p className="text-sm text-[var(--text-tertiary)] mb-2">
               Recovery action
             </p>
-            <p className="text-xl font-medium text-zinc-900 dark:text-zinc-100">
+            <p className="text-xl font-medium text-[var(--text-primary)]">
               {planDetails.recovery}
             </p>
-            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-3 text-sm text-[var(--text-tertiary)]">
               Takes less than 30 seconds
             </p>
           </div>
@@ -94,14 +94,14 @@ export default function RecoveryPage() {
             <button
               onClick={handleSkip}
               disabled={completing}
-              className="w-full py-3 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              className="w-full py-3 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
             >
               Skip for now
             </button>
           </div>
 
           {/* Context */}
-          <p className="text-center text-xs text-zinc-400">
+          <p className="text-center text-xs text-[var(--text-tertiary)]">
             Recovery counts as a rep. You&apos;re not starting over.
           </p>
         </div>

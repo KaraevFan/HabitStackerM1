@@ -109,7 +109,7 @@ export default function YourSystemScreen({
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="min-h-dvh bg-[var(--bg-primary)]">
       <div className="mx-auto max-w-lg">
         {/* Header */}
         <div className="px-4 py-4 border-b border-[var(--bg-tertiary)]">

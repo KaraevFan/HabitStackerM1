@@ -32,7 +32,7 @@ export default function SystemPage() {
 
   if (isLoading || !habitData?.system) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
         <p className="text-[var(--text-tertiary)]">Loading...</p>
       </div>
     );

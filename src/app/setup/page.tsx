@@ -161,9 +161,9 @@ export default function SetupPage() {
   // Show loading state during hydration
   if (!isHydrated) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bg-primary)]">
+      <div className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-primary)]">
         <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin mx-auto" />
+          <div className="size-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin mx-auto" role="status" aria-label="Loading" />
           <p className="text-[var(--text-secondary)]">
             Loading...
           </p>
@@ -175,9 +175,9 @@ export default function SetupPage() {
   // Show transition state
   if (isTransitioning) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--bg-primary)]">
+      <div className="flex flex-col items-center justify-center min-h-dvh bg-[var(--bg-primary)]">
         <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin mx-auto" />
+          <div className="size-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin mx-auto" role="status" aria-label="Loading" />
           <p className="text-[var(--text-secondary)]">
             Preparing your habit...
           </p>
@@ -199,7 +199,7 @@ export default function SetupPage() {
 
   // Show chat interface
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-primary)]">
+    <div className="flex flex-col min-h-dvh bg-[var(--bg-primary)]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--bg-tertiary)]">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">

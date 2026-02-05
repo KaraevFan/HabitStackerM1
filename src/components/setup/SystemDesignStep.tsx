@@ -201,7 +201,7 @@ export default function SystemDesignStep({ onComplete }: SystemDesignStepProps) 
     return (
       <div className="space-y-6">
         <div className="flex min-h-[200px] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)]" />
+          <div className="size-8 animate-spin rounded-full border-4 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)]" role="status" aria-label="Loading" />
         </div>
       </div>
     );

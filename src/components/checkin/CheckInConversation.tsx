@@ -348,7 +348,7 @@ export default function CheckInConversation({
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
+    <div className="min-h-dvh bg-[var(--bg-primary)] flex flex-col">
       {/* Header */}
       <div className="flex-shrink-0 px-6 pt-8 pb-4">
         <p className="text-[var(--text-tertiary)] text-sm">{config.headerText}</p>

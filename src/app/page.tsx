@@ -46,9 +46,9 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
         <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin mx-auto" />
+          <div className="size-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin mx-auto" role="status" aria-label="Loading" />
           <p className="text-[var(--text-tertiary)]">Loading...</p>
         </div>
       </div>

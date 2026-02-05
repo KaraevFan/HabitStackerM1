@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useCallback } from 'react';
 import { CheckIn, getCheckInState, CheckInState } from '@/types/habit';
 
 interface DayDetailSheetProps {
@@ -60,14 +61,14 @@ function getStatusBadge(state: CheckInState): {
     case 'no_trigger':
       return {
         label: 'SKIPPED',
-        bgClass: 'bg-[#FDF6E3]',
+        bgClass: 'bg-[var(--warning-subtle)]',
         textClass: 'text-[var(--warning)]',
         message: 'You acknowledged the day.',
       };
     case 'missed':
       return {
         label: 'MISSED',
-        bgClass: 'bg-[#FDE8E8]',
+        bgClass: 'bg-[var(--error-subtle)]',
         textClass: 'text-[var(--error)]',
         message: 'No check-in recorded.',
       };
@@ -124,7 +125,7 @@ function DifficultyDots({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map((level) => (
         <div
           key={level}
-          className={`w-2 h-2 rounded-full ${
+          className={`size-2 rounded-full ${
             level <= rating
               ? 'bg-[var(--accent-primary)]'
               : 'bg-[var(--bg-tertiary)]'
@@ -139,6 +140,21 @@ function DifficultyDots({ rating }: { rating: number }) {
  * DayDetailSheet — Bottom sheet modal for viewing day detail
  */
 export default function DayDetailSheet({ isOpen, onClose, checkIn, date }: DayDetailSheetProps) {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen || !date) return null;
 
   const state = checkIn ? getCheckInState(checkIn) : null;
@@ -150,13 +166,19 @@ export default function DayDetailSheet({ isOpen, onClose, checkIn, date }: DayDe
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
+        className="fixed inset-0 bg-[var(--overlay)] z-[var(--z-overlay)] transition-opacity"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Sheet */}
-      <div className="fixed inset-x-0 bottom-0 z-50 animate-slide-up">
-        <div className="bg-[var(--bg-primary)] rounded-t-2xl shadow-lg max-h-[80vh] overflow-y-auto">
+      <div
+        className="fixed inset-x-0 bottom-0 z-[var(--z-sheet)] animate-slide-up"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Details for ${formatFullDate(date)}`}
+      >
+        <div className="bg-[var(--bg-primary)] rounded-t-2xl shadow-lg max-h-[80vh] overflow-y-auto safe-area-bottom">
           {/* Drag Handle */}
           <div className="flex justify-center py-3">
             <div className="w-10 h-1 bg-[var(--bg-tertiary)] rounded-full" />
@@ -204,7 +226,7 @@ export default function DayDetailSheet({ isOpen, onClose, checkIn, date }: DayDe
 
                 {/* Quantitative value */}
                 {checkIn.reflection?.quantitative && (
-                  <div className="text-2xl font-semibold text-[var(--text-primary)]">
+                  <div className="text-2xl font-semibold text-[var(--text-primary)] tabular-nums">
                     {checkIn.reflection.quantitative}
                   </div>
                 )}
@@ -266,20 +288,6 @@ export default function DayDetailSheet({ isOpen, onClose, checkIn, date }: DayDe
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(100%);
-          }
-          to {
-            transform: translateY(0);
-          }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
     </>
   );
 }

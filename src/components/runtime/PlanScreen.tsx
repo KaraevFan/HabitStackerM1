@@ -93,7 +93,7 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
 
   if (!anchor || !action) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
         <p className="text-[var(--text-tertiary)]">No plan found. Please set up your habit.</p>
       </div>
     );
