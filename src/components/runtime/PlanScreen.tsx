@@ -11,9 +11,15 @@ import DayTimeline from "@/components/journey/DayTimeline";
 import PatternsSection from "@/components/journey/PatternsSection";
 import NarrativeHeader from "@/components/journey/NarrativeHeader";
 import DayDetailSheet from "@/components/journey/DayDetailSheet";
+import ToolkitSection from "@/components/self/ToolkitSection";
+import ConfirmationSheet from "@/components/common/ConfirmationSheet";
+import MenuSheet from "@/components/common/MenuSheet";
 import { HabitData, getPlanScreenState, getHabitEmoji, getSetupProgress, normalizeThenSteps, CheckIn } from "@/types/habit";
-import { toggleSetupItem, markSetupItemNA } from "@/lib/store/habitStore";
+import { formatRitualStatement } from "@/lib/format";
+import { toggleSetupItem, markSetupItemNA, getLatestPatternSnapshot } from "@/lib/store/habitStore";
 import { analyzePatterns } from "@/lib/patterns/patternFinder";
+import { applySystemUpdate, SystemUpdateField } from "@/lib/store/systemUpdater";
+import { useReflectionTrigger, getReflectionPrompt } from "@/hooks/useReflectionTrigger";
 
 interface PlanScreenProps {
   habitData: HabitData;
@@ -84,6 +90,34 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
   const [selectedJourneyDate, setSelectedJourneyDate] = useState<string | null>(null);
   const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
   const [dayDetailCheckIn, setDayDetailCheckIn] = useState<CheckIn | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [pendingPatternAction, setPendingPatternAction] = useState<{
+    actionType: string;
+    description: string;
+    newValue?: string;
+    previousValue?: string;
+  } | null>(null);
+
+  // Reflection trigger
+  const reflection = useReflectionTrigger(habitData);
+  const reflectionPrompt = reflection.shouldShowReflection
+    ? getReflectionPrompt(reflection.reflectionType, reflection.daysSinceCreation, reflection.consecutiveMisses)
+    : null;
+
+  // 24-hour dismiss for reflection banner
+  const isReflectionDismissed = (() => {
+    if (typeof window === 'undefined') return false;
+    const dismissedAt = localStorage.getItem('reflection-dismissed-at');
+    if (!dismissedAt) return false;
+    const hoursSince = (Date.now() - new Date(dismissedAt).getTime()) / (1000 * 60 * 60);
+    return hoursSince < 24;
+  })();
+
+  const showReflectionBanner = reflection.shouldShowReflection && !isReflectionDismissed;
+
+  const dismissReflection = () => {
+    localStorage.setItem('reflection-dismissed-at', new Date().toISOString());
+  };
 
   const { snapshot, planDetails, system, repsCount, lastDoneDate, createdAt } = habitData;
 
@@ -103,40 +137,10 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
   const planState = getPlanScreenState(habitData);
   const emoji = getHabitEmoji(anchor, action);
 
-  // Generate hero statement
-  // Clean anchor: remove "after", "when", time qualifiers, and normalize pronouns
-  let cleanAnchor = anchor
-    .replace(/^(after|when)\s+/i, '')
-    .replace(/^(tonight|today|tomorrow|this evening|this morning)\s+/i, '')
-    .replace(/^(after|when)\s+/i, '') // Remove again in case time qualifier was first
-    .replace(/\byou\b/gi, 'I')
-    .replace(/\byour\b/gi, 'my')
-    .trim();
-
-  // Detect if anchor is a noun phrase (alarm, notification, event) vs action phrase
-  const isNounPhrase = /^(\d|my\s|the\s)|alarm|notification|reminder|timer|bell/i.test(cleanAnchor) &&
-    !/^(I|my)\s+(get|sit|wake|stand|finish|start|leave|arrive|come|go)/i.test(cleanAnchor);
-
-  if (isNounPhrase) {
-    if (!/^(my|the)\s/i.test(cleanAnchor)) {
-      cleanAnchor = `my ${cleanAnchor}`;
-    }
-    if (/alarm|notification|reminder|timer|bell/i.test(cleanAnchor) && !/\b(goes|rings|sounds|fires)\b/i.test(cleanAnchor)) {
-      cleanAnchor = `${cleanAnchor} goes off`;
-    }
-  } else {
-    // For action phrases, ensure it starts with "I"
-    cleanAnchor = cleanAnchor.replace(/^I\s+/i, ''); // Remove leading "I" first
-    cleanAnchor = `I ${cleanAnchor.charAt(0).toLowerCase()}${cleanAnchor.slice(1)}`;
-  }
-
-  let cleanAction = action
-    .replace(/^I\s+/i, '') // Remove leading "I " since we add it in template
-    .replace(/\byou\b/gi, 'I')
-    .replace(/\byour\b/gi, 'my')
-    .trim();
-  cleanAction = cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1);
-  const heroStatement = `When ${cleanAnchor}, I ${cleanAction}.`;
+  // Use LLM-generated ritual statement if available, otherwise fallback
+  const heroStatement = system?.ritualStatement
+    ?? snapshot?.ritualStatement
+    ?? formatRitualStatement(anchor, action);
 
   // Setup checklist handlers
   const handleToggleSetupItem = (itemId: string) => {
@@ -186,16 +190,47 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
   // CTA text based on habit type
   const primaryCTAText = isReactiveHabit ? 'How was last night?' : "Mark today's rep";
 
+  // Pattern action handlers
+  const handlePatternAction = (actionType: string) => {
+    const actionDescriptions: Record<string, string> = {
+      anchor: 'Adjust your anchor trigger',
+      tiny_version: 'Switch to your tiny version',
+      environment: 'Update your environment setup',
+      timing: 'Adjust your timing',
+      general: 'Start a reflection',
+    };
+    setPendingPatternAction({
+      actionType,
+      description: actionDescriptions[actionType] || 'Apply suggestion',
+    });
+  };
+
+  const handlePatternConfirm = () => {
+    if (pendingPatternAction?.actionType === 'general') {
+      // Redirect to reflection
+      window.location.href = '/reflect?mode=on_demand';
+    }
+    // For other types, the ConfirmationSheet handles the mutation
+    setPendingPatternAction(null);
+  };
+
+  const handlePatternDismiss = () => {
+    setPendingPatternAction(null);
+  };
+
   // Calculate week progress
   const weekDay = getWeekDay(createdAt);
   const weekNumber = getWeekNumber(createdAt);
+
+  // Pattern caching
+  const cachedPatterns = typeof window !== 'undefined' ? getLatestPatternSnapshot() : null;
 
   return (
     <div className="today-screen">
       {/* Header */}
       <header className="today-header">
         <span className="today-label">YOUR HABIT</span>
-        <button className="menu-button" aria-label="Menu">
+        <button className="menu-button" aria-label="Menu" onClick={() => setIsMenuOpen(true)}>
           ⋯
         </button>
       </header>
@@ -271,6 +306,39 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
           <p className="stat-label">Last done</p>
         </div>
       </div>
+
+      {/* Reflection Banner */}
+      {showReflectionBanner && reflectionPrompt && (
+        <div className="nudge-card accent">
+          <Link href={`/reflect${reflection.reflectionType === 'recovery' ? '?mode=recovery' : ''}`} className="flex items-center gap-3 flex-1">
+            <span className="nudge-emoji">
+              {reflection.reflectionType === 'recovery' ? '💬' : '📊'}
+            </span>
+            <div className="nudge-content">
+              <p className="nudge-title">
+                {reflection.reflectionType === 'recovery'
+                  ? "Let's talk — I noticed a few tough days"
+                  : `Week ${reflection.weekNumber} check-in`}
+              </p>
+              <p className="nudge-text">
+                {reflection.reflectionType === 'recovery'
+                  ? 'Recovery reflection can help reset your system.'
+                  : "How's your system working?"}
+              </p>
+            </div>
+            <span className="nudge-arrow">→</span>
+          </Link>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              dismissReflection();
+            }}
+            className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] ml-2 whitespace-nowrap"
+          >
+            Later
+          </button>
+        </div>
+      )}
 
       {/* Conditional Cards */}
 
@@ -380,6 +448,8 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
                 patterns={analyzePatterns(habitData.checkIns || [], system?.habitType || 'time_anchored')}
                 system={system!}
                 habitType={system?.habitType || 'time_anchored'}
+                onAction={handlePatternAction}
+                onDismiss={handlePatternDismiss}
               />
             </>
           )}
@@ -406,21 +476,45 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
 
           {hasIdentity && <div className="divider" />}
 
+          {/* Toolkit section */}
+          {system && <ToolkitSection system={system} />}
+
+          {system?.tinyVersion || system?.environmentPrime || system?.frictionReduced ? (
+            <div className="divider" />
+          ) : null}
+
           {/* Progression section */}
           <ProgressionSection repsCount={repsCount} createdAt={createdAt} />
         </div>
       )}
 
-      {/* Why this works - Collapsed */}
+      {/* Why this works - Personalized if available, generic fallback */}
       {!activeTab && (
         <details className="science-section">
           <summary className="science-trigger">Why this approach works</summary>
           <div className="science-content">
-            <p>
-              Tiny actions attached to existing routines are nearly impossible to skip.
-              If you do miss, the 30-second recovery brings you right back.
-              No lost progress—just continuity.
-            </p>
+            {system?.rationale ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide mb-1">The Principle</p>
+                  <p>{system.rationale.principle}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide mb-1">Why It Fits You</p>
+                  <p>{system.rationale.whyItFitsYou}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide mb-1">What to Expect</p>
+                  <p>{system.rationale.whatToExpect}</p>
+                </div>
+              </div>
+            ) : (
+              <p>
+                Tiny actions attached to existing routines are nearly impossible to skip.
+                If you do miss, the 30-second recovery brings you right back.
+                No lost progress—just continuity.
+              </p>
+            )}
           </div>
         </details>
       )}
@@ -442,6 +536,20 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
           </button>
         ))}
       </nav>
+
+      {/* Menu Sheet */}
+      <MenuSheet isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+
+      {/* Pattern Confirmation Sheet */}
+      <ConfirmationSheet
+        isOpen={!!pendingPatternAction}
+        onConfirm={handlePatternConfirm}
+        onCancel={() => setPendingPatternAction(null)}
+        title="Update your system?"
+        description={pendingPatternAction?.description || ''}
+        previousValue={pendingPatternAction?.previousValue}
+        newValue={pendingPatternAction?.newValue}
+      />
 
       <style jsx>{`
         .today-screen {

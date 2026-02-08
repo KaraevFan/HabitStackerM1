@@ -12,6 +12,8 @@ import {
   generateRepLogId,
   generateCheckInId,
   getCheckInState,
+  WeeklyReflection,
+  PatternSnapshot,
 } from "@/types/habit";
 
 const STORAGE_KEY = "habit-stacker-data";
@@ -548,6 +550,104 @@ export function updateCheckInConversation(
   ) || [];
 
   return updateHabitData({ checkIns });
+}
+
+// ============================================
+// REFLECTION SYSTEM FUNCTIONS (R18)
+// ============================================
+
+/**
+ * Save a weekly/recovery reflection
+ */
+export function saveReflection(reflection: WeeklyReflection): HabitData {
+  const current = loadHabitData();
+  const reflections = [...(current.reflections || []), reflection];
+
+  // Compute next reflection due (7 days from now)
+  const nextDue = new Date();
+  nextDue.setDate(nextDue.getDate() + 7);
+
+  return updateHabitData({
+    reflections,
+    lastReflectionDate: new Date().toISOString(),
+    nextReflectionDue: nextDue.toISOString(),
+  });
+}
+
+// ============================================
+// PATTERN CACHING FUNCTIONS (R18)
+// ============================================
+
+/**
+ * Save a pattern snapshot to cache
+ */
+export function savePatternSnapshot(snapshot: PatternSnapshot): HabitData {
+  const current = loadHabitData();
+  const history = [...(current.patternHistory || []), snapshot];
+
+  return updateHabitData({
+    patternHistory: history,
+    latestPatternGeneratedAt: snapshot.generatedAt,
+  });
+}
+
+/**
+ * Get latest cached pattern snapshot
+ */
+export function getLatestPatternSnapshot(): PatternSnapshot | null {
+  const current = loadHabitData();
+  const history = current.patternHistory || [];
+  return history.length > 0 ? history[history.length - 1] : null;
+}
+
+/**
+ * Check if patterns should be regenerated
+ * True if: >7 days since last generation, or significant check-in count change (3+)
+ */
+export function shouldRegeneratePatterns(): boolean {
+  const current = loadHabitData();
+  const lastGenerated = current.latestPatternGeneratedAt;
+  const lastSnapshot = getLatestPatternSnapshot();
+
+  if (!lastGenerated || !lastSnapshot) return true;
+
+  // More than 7 days since last generation
+  const daysSince = Math.floor(
+    (Date.now() - new Date(lastGenerated).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (daysSince >= 7) return true;
+
+  // Significant check-in count change (3+ new check-ins)
+  const currentCheckInCount = current.checkIns?.length || 0;
+  if (currentCheckInCount - lastSnapshot.checkInCount >= 3) return true;
+
+  return false;
+}
+
+// ============================================
+// GRADUATION FUNCTIONS (R18)
+// ============================================
+
+/**
+ * Graduate current habit to maintained state
+ */
+export function graduateHabit(): HabitData {
+  return updateHabitData({
+    state: 'maintained',
+    graduatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Pause current habit
+ */
+export function pauseHabit(reason: string, reentryPlan?: string): HabitData {
+  return updateHabitData({
+    state: 'paused',
+    pausedAt: new Date().toISOString(),
+    pauseReason: reason,
+    reentryPlan,
+  });
 }
 
 /**

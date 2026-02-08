@@ -2,7 +2,8 @@
  * Habit state machine states
  * Install → Designed → Active → Miss → Recover → (later: Review/Graduate)
  */
-export type HabitState = "install" | "designed" | "active" | "missed" | "recovery";
+export type HabitState = "install" | "designed" | "active" | "missed" | "recovery"
+  | "maintained" | "paused" | "archived";
 
 /**
  * Habit type taxonomy (Logging System)
@@ -77,10 +78,75 @@ export interface CheckIn {
 }
 
 /**
+ * Weekly/recovery reflection record
+ */
+export interface WeeklyReflection {
+  id: string;
+  weekNumber: number;
+  completedAt: string;
+  type: 'weekly' | 'recovery' | 'on_demand';
+  sustainability: 'yes' | 'mostly' | 'no' | null;
+  friction: string | null;
+  recommendation: {
+    text: string;
+    changes: string[];
+    appliesTo: 'anchor' | 'action' | 'tiny_version' | 'recovery' | 'timing' | 'none';
+    accepted: boolean;
+    appliedAt?: string;
+  } | null;
+  checkInsSummary: {
+    completed: number;
+    total: number;
+    avgDifficulty: number;
+    difficultyTrend: 'easier' | 'stable' | 'harder';
+  };
+  conversation?: {
+    messages: Array<{ role: 'ai' | 'user'; content: string }>;
+    duration: number;
+  };
+}
+
+/**
+ * Pattern snapshot for caching AI-generated patterns
+ */
+export interface PatternSnapshot {
+  id: string;
+  generatedAt: string;
+  insights: Array<{ type: string; content: string }>;
+  suggestion?: { content: string; actionType: string };
+  checkInCount: number;
+}
+
+/**
+ * Coach's Notes — personalized coaching insights generated from intake + reflections
+ */
+export interface CoachNotes {
+  patternNoticed: string;
+  whyThisHabit: string;
+  scienceIn60Seconds: string;
+  whatToWatchFor: string;
+  yourEdge: string;
+  addenda: CoachNotesAddendum[];
+}
+
+export interface CoachNotesAddendum {
+  addedAt: string;
+  source: string;
+  content: string;
+}
+
+/**
  * Generate a unique ID for check-ins
  */
 export function generateCheckInId(): string {
   return `checkin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Generate a unique ID for reflections
+ */
+export function generateReflectionId(): string {
+  return `reflection-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
 /**
@@ -224,6 +290,7 @@ export interface ConsultSelections {
 export interface HabitSnapshot {
   line1: string; // e.g., "Week 1: Show up."
   line2: string; // e.g., "After [anchor], [2-min action]."
+  ritualStatement?: string; // LLM-generated natural sentence, displayed verbatim
 }
 
 /**
@@ -266,6 +333,7 @@ export interface HabitSystem {
   // Core (from intake agent)
   anchor: string;
   action: string;
+  ritualStatement?: string; // LLM-generated natural sentence, displayed verbatim
   then?: string[]; // Recurring steps done AFTER each rep (from HabitRecommendation.followUp)
   recovery: string;
   whyItFits: string[]; // Personalized reasons from conversation
@@ -298,6 +366,16 @@ export interface HabitSystem {
   // Reminder settings (R14 - data model now, push notifications later)
   reminderTime?: string;  // "20:00" - extracted from intake conversation
   reminderLabel?: string; // "Money check" - label for the reminder
+
+  // Personalized rationale (R18 - from intake agent)
+  rationale?: {
+    principle: string;
+    whyItFitsYou: string;
+    whatToExpect: string;
+  };
+
+  // Coach's Notes (R18 - generated after intake, updated after reflections)
+  coachNotes?: CoachNotes;
 }
 
 /**
@@ -403,6 +481,22 @@ export interface HabitData {
 
   // Logging System additions
   checkIns?: CheckIn[]; // New check-in records
+
+  // Reflection system (R18)
+  reflections?: WeeklyReflection[];
+  nextReflectionDue?: string;
+  lastReflectionDate?: string;
+  lastStageShownAt?: string;
+
+  // Pattern caching (R18)
+  patternHistory?: PatternSnapshot[];
+  latestPatternGeneratedAt?: string;
+
+  // Graduation (R18)
+  graduatedAt?: string;
+  pausedAt?: string;
+  pauseReason?: string;
+  reentryPlan?: string;
 }
 
 /**

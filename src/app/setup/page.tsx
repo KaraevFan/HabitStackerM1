@@ -10,6 +10,7 @@ import { extractPlanFromRecommendation } from '@/types/conversation';
 import { IntakeAnalytics } from '@/lib/analytics/intakeAnalytics';
 import { HabitSystem, SetupItem } from '@/types/habit';
 import { HabitRecommendation } from '@/lib/ai/prompts/intakeAgent';
+import { formatRitualStatement } from '@/lib/format';
 
 /**
  * Convert recommendation to HabitSystem
@@ -33,6 +34,7 @@ function recommendationToSystem(
   return {
     anchor: rec.anchor,
     action: rec.action,
+    ritualStatement: rec.ritualStatement,
     then: rec.followUp,
     recovery: rec.recovery,
     whyItFits: rec.whyItFits || [],
@@ -48,6 +50,8 @@ function recommendationToSystem(
     // R14: Reminder settings (data model now, notifications later)
     reminderTime: rec.reminderTime,
     reminderLabel: rec.reminderLabel,
+    // R18: Personalized rationale
+    rationale: rec.rationale,
   };
 }
 
@@ -110,16 +114,19 @@ export default function SetupPage() {
     // Save to HabitData
     const planDetails = extractPlanFromRecommendation(state.recommendation);
     const system = recommendationToSystem(state.recommendation, checkedSetupItems);
+    const ritualLine = state.recommendation.ritualStatement
+      ?? formatRitualStatement(planDetails.anchor, planDetails.action);
 
     if (startNow) {
-      // Start first rep immediately
+      // Activate habit — first real rep will be logged via logCheckIn()
       updateHabitData({
         state: 'active',
         planDetails,
         system,
         snapshot: {
           line1: 'Week 1: Show up.',
-          line2: `After ${planDetails.anchor}, ${planDetails.action}.`,
+          line2: ritualLine,
+          ritualStatement: state.recommendation.ritualStatement,
         },
         intakeState: {
           ...state,
@@ -127,8 +134,6 @@ export default function SetupPage() {
           isComplete: true,
           completedAt: new Date().toISOString(),
         },
-        repsCount: 1,
-        lastDoneDate: new Date().toISOString().split('T')[0],
       });
     } else {
       // Save but don't log first rep
@@ -138,7 +143,8 @@ export default function SetupPage() {
         system,
         snapshot: {
           line1: 'Week 1: Show up.',
-          line2: `After ${planDetails.anchor}, ${planDetails.action}.`,
+          line2: ritualLine,
+          ritualStatement: state.recommendation.ritualStatement,
         },
         intakeState: {
           ...state,
@@ -147,6 +153,30 @@ export default function SetupPage() {
           completedAt: new Date().toISOString(),
         },
       });
+    }
+
+    // Fire coach notes generation async (Phase 5)
+    if (state.messages && state.messages.length > 0) {
+      fetch('/api/coach-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'generate',
+          intakeTranscript: state.messages,
+          habitSystem: system,
+        }),
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            if (data.coachNotes) {
+              updateHabitData({
+                system: { ...system, coachNotes: data.coachNotes },
+              });
+            }
+          }
+        })
+        .catch(() => {}); // Fire and forget
     }
 
     // Navigate to home

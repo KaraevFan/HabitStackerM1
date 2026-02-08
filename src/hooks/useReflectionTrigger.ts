@@ -9,6 +9,7 @@ interface ReflectionTriggerResult {
   daysSinceCreation: number;
   consecutiveMisses: number;
   lastReflectionDate: string | null;
+  weekNumber: number;
 }
 
 /**
@@ -25,6 +26,7 @@ export function useReflectionTrigger(
         daysSinceCreation: 0,
         consecutiveMisses: 0,
         lastReflectionDate: null,
+        weekNumber: 0,
       };
     }
 
@@ -34,9 +36,10 @@ export function useReflectionTrigger(
     const daysSinceCreation = Math.floor(
       (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)
     );
+    const weekNumber = Math.floor(daysSinceCreation / 7);
 
-    // Get last reflection date from habit data (if stored)
-    const lastReflectionDate = (habitData as HabitDataWithReflection).lastReflectionDate || null;
+    // Get last reflection date from habit data
+    const lastReflectionDate = habitData.lastReflectionDate || null;
 
     // Check for consecutive misses (3+ triggers recovery reflection)
     const consecutiveMisses = countConsecutiveMisses(checkIns);
@@ -49,6 +52,7 @@ export function useReflectionTrigger(
         daysSinceCreation,
         consecutiveMisses,
         lastReflectionDate,
+        weekNumber,
       };
     }
 
@@ -65,6 +69,7 @@ export function useReflectionTrigger(
           daysSinceCreation,
           consecutiveMisses,
           lastReflectionDate,
+          weekNumber,
         };
       }
     }
@@ -75,6 +80,7 @@ export function useReflectionTrigger(
       daysSinceCreation,
       consecutiveMisses,
       lastReflectionDate,
+      weekNumber,
     };
   }, [habitData]);
 }
@@ -110,11 +116,6 @@ function isWithinLastWeek(dateStr: string): boolean {
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   return date >= weekAgo;
-}
-
-// Extended type for habit data with reflection fields
-interface HabitDataWithReflection extends HabitData {
-  lastReflectionDate?: string;
 }
 
 /**
@@ -169,7 +170,7 @@ export function shouldTriggerReflection(habitData: HabitData): ReflectionType {
   }
 
   // Check for weekly reflection
-  const lastReflectionDate = (habitData as HabitDataWithReflection).lastReflectionDate;
+  const lastReflectionDate = habitData.lastReflectionDate;
   if (daysSinceCreation >= 7) {
     const hasReflectedThisWeek = lastReflectionDate
       ? isWithinLastWeek(lastReflectionDate)

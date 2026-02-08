@@ -118,6 +118,7 @@ export default function OnboardingFlow({
         <RitualReveal
           anchor={recommendation.anchor}
           action={recommendation.action}
+          ritualStatement={recommendation.ritualStatement}
           whyItFits={recommendation.whyItFits}
           recovery={recommendation.recovery}
           onNext={goNext}

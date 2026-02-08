@@ -153,7 +153,10 @@ export default function CheckInFlow({
       : null;
 
     const completedCount = previousCheckIns.filter(
-      c => getCheckInState(c) === 'completed'
+      c => {
+        const s = getCheckInState(c);
+        return s === 'completed' || s === 'recovered';
+      }
     ).length;
 
     // Only set success content for states that show the success screen

@@ -77,6 +77,7 @@ Respond with JSON:
 {
   "anchor": "10:10pm alarm labeled 'Pack up'",
   "action": "Spend 3-5 minutes moving gaming gear out of bedroom",
+  "ritualStatement": "When my 10:10pm alarm goes off, I spend 3-5 minutes moving gaming gear out of bedroom.",
   "followUp": ["Brush teeth", "Dim lights", "In bed by 11pm"],
   "whyItFits": [
     "Your main blocker is location—gaming at your bedroom desk keeps you playing",
@@ -101,8 +102,18 @@ Respond with JSON:
   "principle": "Consistent cues build automatic associations faster than willpower alone.",
   "expectations": "The first week may feel effortful. By week 2, the cue starts triggering the behavior automatically.",
   "reminderTime": "22:10",
-  "reminderLabel": "Sleep prep"
+  "reminderLabel": "Sleep prep",
+  "rationale": {
+    "principle": "Physical environment changes reduce the need for self-control.",
+    "whyItFitsYou": "You mentioned gaming pulls you in because the setup is frictionless — we're using that same principle in reverse by physically moving the gear.",
+    "whatToExpect": "The first week will feel deliberate. By week 2, the shutdown ritual starts feeling automatic."
+  }
 }
+
+**ritualStatement**: A natural first-person sentence in the form "When [trigger], I [action]." — this is displayed verbatim on the confirmation screen, so make it read naturally as a complete sentence. Examples:
+- "When my 10:10pm alarm goes off, I spend 3-5 minutes moving gaming gear out of bedroom."
+- "After I brush my teeth, I read one page of my book."
+- "When I sit down at my desk, I open my budget app and log yesterday's spending."
 
 This structured data powers the confirmation screen. The chat message itself should be SHORT—just the core recommendation + "Want to try this?"
 
@@ -205,6 +216,11 @@ When you recommend, also generate:
     - Examples: "Money check", "Spending review", "Sleep prep", "Morning stretch"
     - Should be recognizable at a glance on a phone notification
 
+12. **rationale**: Required. Personalized 3-part explanation object:
+    - **principle**: One sentence of behavioral science behind the approach (e.g., "Implementation intentions double follow-through by linking action to a specific cue.")
+    - **whyItFitsYou**: 1-2 sentences explaining why this specific design fits the user's situation, referencing what they shared (e.g., "You mentioned gaming pulls you in because the setup is frictionless — we're using that same principle in reverse.")
+    - **whatToExpect**: 1-2 sentences about the first week (e.g., "Week 1 will feel deliberate. By week 2, the cue starts doing the work for you.")
+
 ### Field notes:
 
 **suggestedResponses**: 2-4 tappable options relevant to your question.
@@ -304,6 +320,7 @@ export type HabitType = 'time_anchored' | 'event_anchored' | 'reactive';
 export interface HabitRecommendation {
   anchor: string;
   action: string;
+  ritualStatement?: string; // "When [trigger], I [action]." — displayed verbatim
   followUp?: string[];  // Recurring steps done AFTER each rep (maps to HabitSystem.then)
   whyItFits: string[];
   recovery: string;
@@ -320,6 +337,12 @@ export interface HabitRecommendation {
   // R14 additions - reminder data (captured for future notifications)
   reminderTime?: string; // "20:00" - when to remind user
   reminderLabel?: string; // Short label for the reminder, e.g. "Money check"
+  // R18 addition - personalized rationale
+  rationale?: {
+    principle: string;
+    whyItFitsYou: string;
+    whatToExpect: string;
+  };
 }
 
 /**

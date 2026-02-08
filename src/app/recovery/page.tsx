@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadHabitData, logEvent } from '@/lib/store/habitStore';
 import { HabitData } from '@/types/habit';
+import { getUserState } from '@/hooks/useUserState';
 import Button from '@/components/ui/Button';
 
 export default function RecoveryPage() {
@@ -18,10 +19,13 @@ export default function RecoveryPage() {
     setIsLoading(false);
 
     // Redirect if no habit or not in missed state
-    if (!data || data.state !== 'missed') {
+    // Use getUserState (same logic as Home page) to avoid redirect loops
+    const userState = getUserState(data);
+    if (userState !== 'missed_yesterday') {
       router.push('/');
     }
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRecoveryDone = () => {
     setCompleting(true);

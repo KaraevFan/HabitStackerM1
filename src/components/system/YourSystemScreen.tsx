@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HabitSystem, getHabitEmoji, normalizeThenSteps } from '@/types/habit';
 import EditBottomSheet from './EditBottomSheet';
+import CoachNotesCard from './CoachNotesCard';
 
 /**
  * Format 24h time string to 12h format
@@ -398,6 +399,9 @@ export default function YourSystemScreen({
               )}
             </div>
           )}
+
+          {/* Coach's Notes */}
+          <CoachNotesCard notes={system.coachNotes} />
 
           {/* Re-tune CTA - De-emphasized */}
           <div className="pt-4">

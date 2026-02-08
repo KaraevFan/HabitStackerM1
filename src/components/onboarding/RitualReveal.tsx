@@ -2,54 +2,17 @@
 
 import Button from '@/components/ui/Button';
 import { getHabitEmoji } from '@/types/habit';
+import { formatRitualStatement } from '@/lib/format';
 
 interface RitualRevealProps {
   anchor: string;
   action: string;
+  ritualStatement?: string;
   whyItFits: string[];
   recovery: string;
   onNext: () => void;
   onBack: () => void;
   onAdjust: () => void;
-}
-
-/**
- * Generate hero statement from anchor and action
- * Handles both action anchors ("I brush my teeth") and event anchors ("my alarm goes off")
- */
-function generateHeroStatement(anchor: string, action: string): string {
-  let cleanAnchor = anchor
-    .replace(/^(after|when)\s+/i, '')
-    .replace(/^(tonight|today|tomorrow|this evening|this morning)\s+/i, '')
-    .replace(/^(after|when)\s+/i, '')
-    .replace(/\byou\b/gi, 'I')
-    .replace(/\byour\b/gi, 'my')
-    .trim();
-
-  // Detect if anchor is a noun phrase (alarm, notification, event) vs action phrase
-  const isNounPhrase = /^(\d|my\s|the\s)|alarm|notification|reminder|timer|bell/i.test(cleanAnchor) &&
-    !/^(I|my)\s+(get|sit|wake|stand|finish|start|leave|arrive|come|go)/i.test(cleanAnchor);
-
-  if (isNounPhrase) {
-    if (!/^(my|the)\s/i.test(cleanAnchor)) {
-      cleanAnchor = `my ${cleanAnchor}`;
-    }
-    if (/alarm|notification|reminder|timer|bell/i.test(cleanAnchor) && !/\b(goes|rings|sounds|fires)\b/i.test(cleanAnchor)) {
-      cleanAnchor = `${cleanAnchor} goes off`;
-    }
-  } else {
-    if (!/^I\s/i.test(cleanAnchor)) {
-      cleanAnchor = `I ${cleanAnchor.charAt(0).toLowerCase()}${cleanAnchor.slice(1)}`;
-    }
-  }
-
-  let cleanAction = action
-    .replace(/\byou\b/gi, 'I')
-    .replace(/\byour\b/gi, 'my')
-    .trim();
-  cleanAction = cleanAction.charAt(0).toLowerCase() + cleanAction.slice(1);
-
-  return `When ${cleanAnchor}, I ${cleanAction}.`;
 }
 
 /**
@@ -59,6 +22,7 @@ function generateHeroStatement(anchor: string, action: string): string {
 export default function RitualReveal({
   anchor,
   action,
+  ritualStatement,
   whyItFits,
   recovery,
   onNext,
@@ -66,7 +30,7 @@ export default function RitualReveal({
   onAdjust,
 }: RitualRevealProps) {
   const emoji = getHabitEmoji(anchor, action);
-  const heroStatement = generateHeroStatement(anchor, action);
+  const heroStatement = ritualStatement ?? formatRitualStatement(anchor, action);
 
   // Take first 1-2 reasons
   const mainReason = whyItFits.slice(0, 2).join(', and ');

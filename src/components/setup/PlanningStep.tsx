@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import { loadHabitData, completeConsult, setConsultStep } from "@/lib/store/habitStore";
 import { useConsultAI } from "@/lib/ai/useConsultAI";
 import { PlanDetails, HabitSnapshot, ConsultOption } from "@/types/habit";
+import { formatRitualStatement } from "@/lib/format";
 
 interface PlanningStepProps {
   onComplete: () => void;
@@ -52,7 +53,7 @@ function generateSnapshot(successWeek: string, plan: ParsedPlan): HabitSnapshot 
   };
 
   const line2 = plan.anchor
-    ? `${plan.anchor}, ${plan.action.toLowerCase()}.`
+    ? formatRitualStatement(plan.anchor, plan.action)
     : `${plan.action}.`;
 
   return {

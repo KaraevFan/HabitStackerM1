@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import { loadHabitData, completeConsult, setConsultStep } from "@/lib/store/habitStore";
 import { getPlaybook } from "@/lib/playbooks";
 import { PlanDetails, HabitSnapshot, TimingPreference } from "@/types/habit";
+import { formatRitualStatement } from "@/lib/format";
 
 interface SystemDesignStepProps {
   onComplete: () => void;
@@ -189,7 +190,7 @@ export default function SystemDesignStep({ onComplete }: SystemDesignStepProps) 
 
     const snapshot: HabitSnapshot = {
       line1: "Week 1: Show up.",
-      line2: `${anchor}, ${habitInfo.action.toLowerCase()}.`,
+      line2: formatRitualStatement(anchor, habitInfo.action),
     };
 
     completeConsult(planDetails, snapshot);
@@ -313,7 +314,7 @@ export default function SystemDesignStep({ onComplete }: SystemDesignStepProps) 
             Your system
           </p>
           <p className="mt-2 text-lg font-medium text-[var(--text-primary)]">
-            {getEffectiveAnchor()}, {habitInfo.action.toLowerCase()}.
+            {formatRitualStatement(getEffectiveAnchor(), habitInfo.action)}
           </p>
         </div>
       )}
