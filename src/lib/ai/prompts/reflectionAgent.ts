@@ -11,8 +11,9 @@
  * - No generic "Thanks for sharing" or "Anything else on your mind?"
  */
 
-import { CheckIn, HabitSystem } from '@/types/habit';
+import { CheckIn, HabitSystem, DayMemory } from '@/types/habit';
 import { CheckInPatterns } from '@/lib/patterns/patternFinder';
+import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE } from '@/lib/ai/memoryContext';
 
 /**
  * Context passed to the reflection agent
@@ -34,6 +35,9 @@ export interface ReflectionContext {
   // Conversation state
   exchangeCount: number;
   previousMessages: Array<{ role: 'ai' | 'user'; content: string }>;
+
+  // Rolling context from previous days (R19)
+  dayMemories?: DayMemory[];
 }
 
 /**
@@ -194,6 +198,9 @@ Never say "streak" — use:
 - "showing up"
 - "commitment"
 
+## Memory guidance
+${MEMORY_SYSTEM_GUIDANCE}
+
 ## Response length
 
 Keep it SHORT. 2-4 sentences. The user just completed a task and doesn't want to read a wall of text.
@@ -207,14 +214,17 @@ export function buildReflectionUserPrompt(
   context: ReflectionContext,
   userMessage: string
 ): string {
-  const { checkIn, patterns, system, userGoal, realLeverage, exchangeCount, previousMessages } = context;
+  const { checkIn, patterns, system, userGoal, realLeverage, exchangeCount, previousMessages, dayMemories } = context;
 
   const isSuccess = checkIn.actionTaken;
   const isMiss = checkIn.triggerOccurred && !checkIn.actionTaken;
   const difficulty = checkIn.difficulty || checkIn.difficultyRating || 3;
   const repCount = (patterns?.completedCount || 0) + (isSuccess ? 1 : 0);
 
-  let contextBlock = `## Context
+  let contextBlock = `## What you and the user have discussed recently
+${buildMemoryContext(dayMemories)}
+
+## Context
 
 Habit: "${system.anchor}" → "${system.action}"
 Rep #${repCount}${patterns?.isFirstRep ? ' (FIRST REP - milestone moment!)' : ''}

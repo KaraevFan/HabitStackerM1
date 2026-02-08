@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckIn, getCheckInState, CheckInState } from '@/types/habit';
+import { getYesterdayDateString } from '@/lib/dateUtils';
 
 interface DayCardProps {
   checkIn: CheckIn;
@@ -15,11 +16,8 @@ function formatDate(dateStr: string, isToday: boolean): string {
   if (isToday) return 'Today';
 
   const date = new Date(dateStr + 'T00:00:00');
-  const now = new Date();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
 
-  if (dateStr === yesterday.toISOString().split('T')[0]) {
+  if (dateStr === getYesterdayDateString()) {
     return 'Yesterday';
   }
 

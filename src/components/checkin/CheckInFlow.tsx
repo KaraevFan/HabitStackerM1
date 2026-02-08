@@ -18,6 +18,9 @@ import {
   getSuccessSubtitle,
 } from '@/lib/education/whispers';
 import { analyzePatterns, CheckInPatterns } from '@/lib/patterns/patternFinder';
+import { getLocalDateString } from '@/lib/dateUtils';
+import { DayMemory } from '@/types/habit';
+import { saveDayMemory } from '@/lib/store/habitStore';
 import CheckInOptions from './CheckInOptions';
 import CheckInOptionsTimeEvent from './CheckInOptionsTimeEvent';
 import CheckInSuccess from './CheckInSuccess';
@@ -114,7 +117,7 @@ export default function CheckInFlow({
 
   // Log the check-in and prepare success content
   const finalizeCheckIn = (data: Partial<CheckIn>, state: 'completed' | 'no_trigger' | 'missed') => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const checkIn: Omit<CheckIn, 'id' | 'checkedInAt'> = {
       date: today,
       triggerOccurred: data.triggerOccurred ?? true,
@@ -256,16 +259,76 @@ export default function CheckInFlow({
     }
   };
 
+  // Extract DayMemory from conversation (Option A: AI extraction with fallback)
+  const extractAndSaveDayMemory = async (
+    messages: Array<{ role: 'ai' | 'user'; content: string }>,
+    outcome: DayMemory['outcome']
+  ) => {
+    const date = getLocalDateString();
+    try {
+      const response = await fetch('/api/extract-memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, date, outcome }),
+      });
+
+      if (response.ok) {
+        const memory: DayMemory = await response.json();
+        saveDayMemory(memory);
+        return;
+      }
+    } catch {
+      // AI extraction failed — use rule-based fallback
+    }
+
+    // Rule-based fallback (Option B)
+    const userMessages = messages.filter(m => m.role === 'user');
+    const aiMessages = messages.filter(m => m.role === 'ai');
+    const memory: DayMemory = {
+      date,
+      outcome,
+      userShared: userMessages.length > 0
+        ? userMessages[userMessages.length - 1].content.slice(0, 200)
+        : 'No details shared.',
+      coachObservation: aiMessages.length > 0
+        ? aiMessages[aiMessages.length - 1].content.slice(0, 200)
+        : 'Conversation logged.',
+      emotionalTone: 'neutral',
+    };
+    saveDayMemory(memory);
+  };
+
   // Handle conversation completion
   const handleConversationComplete = (conversation: ConversationData) => {
     // Store conversation with today's check-in
     updateTodayConversation(conversation);
+
+    // Extract DayMemory in the background
+    if (conversation.messages.length > 0) {
+      const outcome = checkInData.actionTaken ? 'completed' : 'missed';
+      extractAndSaveDayMemory(conversation.messages, outcome);
+    }
+
     handleDone();
   };
 
-  // Handle conversation skip
+  // Handle conversation skip — generate minimal DayMemory
   const handleConversationSkip = () => {
     updateTodayConversation({ skipped: true, messages: [], duration: 0 });
+
+    // Save minimal DayMemory from check-in data alone
+    const date = getLocalDateString();
+    const habitData = loadHabitData();
+    const repsCount = habitData.repsCount || 0;
+    const memory: DayMemory = {
+      date,
+      outcome: checkInData.actionTaken ? 'completed' : 'missed',
+      userShared: 'Logged without conversation.',
+      coachObservation: `Rep #${repsCount} logged. Difficulty: ${checkInData.difficultyRating || 'not rated'}.`,
+      emotionalTone: 'neutral',
+    };
+    saveDayMemory(memory);
+
     handleDone();
   };
 
@@ -276,6 +339,12 @@ export default function CheckInFlow({
 
     // Store conversation with today's check-in
     updateTodayConversation(conversation);
+
+    // Extract DayMemory in the background
+    if (conversation.messages.length > 0) {
+      const outcome = conversation.recoveryAccepted ? 'recovered' : 'missed';
+      extractAndSaveDayMemory(conversation.messages, outcome);
+    }
 
     // Store miss reason if AI extracted one
     if (conversation.missReason) {
@@ -314,6 +383,18 @@ export default function CheckInFlow({
   // Handle recovery conversation skip (R16)
   const handleRecoveryConversationSkip = () => {
     updateTodayConversation({ skipped: true, messages: [], duration: 0 });
+
+    // Save minimal DayMemory
+    const date = getLocalDateString();
+    const memory: DayMemory = {
+      date,
+      outcome: 'missed',
+      userShared: 'Skipped recovery conversation.',
+      coachObservation: 'Recovery was offered but conversation was skipped.',
+      emotionalTone: 'neutral',
+    };
+    saveDayMemory(memory);
+
     handleDone();
   };
 

@@ -13,8 +13,9 @@
  * 5. Close with momentum — specific forward plan
  */
 
-import { CheckIn, HabitSystem } from '@/types/habit';
+import { CheckIn, HabitSystem, DayMemory } from '@/types/habit';
 import { CheckInPatterns } from '@/lib/patterns/patternFinder';
+import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE } from '@/lib/ai/memoryContext';
 
 /**
  * Context passed to the recovery coach
@@ -27,6 +28,10 @@ export interface RecoveryCoachContext {
   realLeverage: string | null;
   exchangeCount: number;
   previousMessages: Array<{ role: 'ai' | 'user'; content: string }>;
+  // Rolling context from previous days (R19)
+  dayMemories?: DayMemory[];
+  // Multi-day gap awareness (R19 - 3B)
+  daysSinceLastCheckIn?: number;
 }
 
 /**
@@ -168,6 +173,9 @@ Respond with JSON only:
   - Recovery hasn't been discussed yet
   - User raised a system concern worth exploring
 
+## Memory guidance
+${MEMORY_SYSTEM_GUIDANCE}
+
 ## Response length
 Keep it SHORT. 2-4 sentences. They just had a tough moment — don't make them read a wall of text.
 `;
@@ -177,7 +185,7 @@ Keep it SHORT. 2-4 sentences. They just had a tough moment — don't make them r
  * Build the opening message prompt (no user message yet)
  */
 export function buildRecoveryCoachOpenerPrompt(context: RecoveryCoachContext): string {
-  const { patterns, system, userGoal, realLeverage } = context;
+  const { patterns, system, userGoal, realLeverage, dayMemories, daysSinceLastCheckIn } = context;
 
   const completedCount = patterns?.completedCount || 0;
   const currentStreak = patterns?.currentStreak || 0;
@@ -211,6 +219,14 @@ Total reps completed: ${completedCount}
     prompt += `Note: "${patterns.repeatedMissReason}" has been a repeated miss reason\n`;
   }
 
+  if (daysSinceLastCheckIn && daysSinceLastCheckIn > 1) {
+    prompt += `\nIMPORTANT: It's been ${daysSinceLastCheckIn} days since their last check-in. Don't say "yesterday" — acknowledge the multi-day gap gently.\n`;
+  }
+
+  if (dayMemories && dayMemories.length > 0) {
+    prompt += `\n## Recent conversation history\n${buildMemoryContext(dayMemories)}\n`;
+  }
+
   prompt += `
 ## Your task
 
@@ -237,11 +253,14 @@ export function buildRecoveryCoachUserPrompt(
   context: RecoveryCoachContext,
   userMessage: string
 ): string {
-  const { patterns, system, userGoal, realLeverage, exchangeCount, previousMessages } = context;
+  const { patterns, system, userGoal, realLeverage, exchangeCount, previousMessages, dayMemories } = context;
 
   const completedCount = patterns?.completedCount || 0;
 
-  let contextBlock = `## Context
+  let contextBlock = `## What you and the user have discussed recently
+${buildMemoryContext(dayMemories)}
+
+## Context
 
 Habit: "${system.anchor}" -> "${system.action}"
 Recovery action: "${system.recovery}"

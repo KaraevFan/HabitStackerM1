@@ -11,6 +11,7 @@
  */
 
 import { HabitData, CheckIn } from '@/types/habit';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 export interface GraduationCriterion {
   label: string;
@@ -88,13 +89,13 @@ export function assessGraduation(
 function getLast14DaysCheckIns(checkIns: CheckIn[]): CheckIn[] {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 14);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const cutoffStr = getLocalDateString(cutoff);
   return checkIns.filter(c => c.date >= cutoffStr);
 }
 
 function getLast7DaysCheckIns(checkIns: CheckIn[]): CheckIn[] {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const cutoffStr = getLocalDateString(cutoff);
   return checkIns.filter(c => c.date >= cutoffStr);
 }

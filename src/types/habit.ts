@@ -107,6 +107,20 @@ export interface WeeklyReflection {
 }
 
 /**
+ * DayMemory — structured summary of a daily conversation (R19)
+ * Provides rolling context for AI conversations across days.
+ */
+export interface DayMemory {
+  date: string;                    // YYYY-MM-DD
+  outcome: 'completed' | 'missed' | 'recovered' | 'skipped';
+  userShared: string;              // 1-2 sentence summary of what the user said
+  frictionNote?: string;           // What was hard, in user's language
+  winNote?: string;                // What worked, in user's language
+  coachObservation: string;        // What the AI noticed or recommended
+  emotionalTone?: string;          // e.g., "frustrated", "proud", "tired", "motivated"
+}
+
+/**
  * Pattern snapshot for caching AI-generated patterns
  */
 export interface PatternSnapshot {
@@ -497,6 +511,12 @@ export interface HabitData {
   pausedAt?: string;
   pauseReason?: string;
   reentryPlan?: string;
+
+  // DayMemory rolling journal (R19)
+  dayMemories?: DayMemory[];
+
+  // Backup/restore flag (R19 — transient, not persisted)
+  _needsRestoreConfirmation?: boolean;
 }
 
 /**

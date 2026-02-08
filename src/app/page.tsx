@@ -8,7 +8,10 @@ import { getUserState } from "@/hooks/useUserState";
 import { shouldShowStageTransition, detectStage, STAGES } from "@/lib/progression/stageDetector";
 import PlanScreen from "@/components/runtime/PlanScreen";
 import WelcomeScreen from "@/components/runtime/WelcomeScreen";
+import BackfillCard from "@/components/runtime/BackfillCard";
+import WelcomeBackCard from "@/components/runtime/WelcomeBackCard";
 import StageTransitionScreen from "@/components/progression/StageTransitionScreen";
+import RestorePrompt from "@/components/common/RestorePrompt";
 
 /**
  * Home page with state-based routing
@@ -25,11 +28,18 @@ export default function Home() {
   const [habitData, setHabitData] = useState<HabitData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showStageTransition, setShowStageTransition] = useState(false);
+  const [showRestorePrompt, setShowRestorePrompt] = useState(false);
 
   useEffect(() => {
     const data = loadHabitData();
     setHabitData(data);
     setIsLoading(false);
+
+    // Check if data was restored from backup and needs confirmation
+    if (data._needsRestoreConfirmation) {
+      setShowRestorePrompt(true);
+      return;
+    }
 
     // Determine user state and route accordingly
     const userState = getUserState(data);
@@ -40,10 +50,8 @@ export default function Home() {
       return;
     }
 
-    if (userState === 'missed_yesterday') {
-      router.push('/recovery');
-      return;
-    }
+    // missed_yesterday and needs_reentry now handled on home screen
+    // via backfill disambiguation UI — no redirect needed
 
     // Check for stage transition celebration
     if (data && data.state === 'active' && data.createdAt) {
@@ -62,6 +70,19 @@ export default function Home() {
           <p className="text-[var(--text-tertiary)]">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  // Restore prompt
+  if (showRestorePrompt) {
+    return (
+      <RestorePrompt
+        onRestored={() => window.location.reload()}
+        onDismissed={() => {
+          setShowRestorePrompt(false);
+          setHabitData(loadHabitData());
+        }}
+      />
     );
   }
 

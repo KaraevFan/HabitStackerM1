@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChatContainer } from '@/components/chat';
 import { OnboardingFlow } from '@/components/onboarding';
 import { useIntakeAgent } from '@/lib/ai/useIntakeAgent';
-import { updateHabitData } from '@/lib/store/habitStore';
+import { loadHabitData, updateHabitData } from '@/lib/store/habitStore';
 import { extractPlanFromRecommendation } from '@/types/conversation';
 import { IntakeAnalytics } from '@/lib/analytics/intakeAnalytics';
 import { HabitSystem, SetupItem } from '@/types/habit';
@@ -170,9 +170,13 @@ export default function SetupPage() {
           if (res.ok) {
             const data = await res.json();
             if (data.coachNotes) {
-              updateHabitData({
-                system: { ...system, coachNotes: data.coachNotes },
-              });
+              // Load fresh state — don't use stale `system` closure
+              const fresh = loadHabitData();
+              if (fresh.system) {
+                updateHabitData({
+                  system: { ...fresh.system, coachNotes: data.coachNotes },
+                });
+              }
             }
           }
         })

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { loadHabitData, logEvent } from '@/lib/store/habitStore';
+import { loadHabitData, logEvent, skipRecovery } from '@/lib/store/habitStore';
 import { HabitData } from '@/types/habit';
 import { getUserState } from '@/hooks/useUserState';
 import Button from '@/components/ui/Button';
@@ -37,6 +37,12 @@ export default function RecoveryPage() {
     setCompleting(true);
     logEvent('skip', 'Skipped recovery');
     router.push('/');
+  };
+
+  const handleSkipToToday = () => {
+    setCompleting(true);
+    skipRecovery();
+    router.push('/today');
   };
 
   if (isLoading || !habitData?.planDetails) {
@@ -108,6 +114,15 @@ export default function RecoveryPage() {
           <p className="text-center text-xs text-[var(--text-tertiary)]">
             Recovery counts as a rep. You&apos;re not starting over.
           </p>
+
+          {/* Escape hatch — skip recovery, go to today's check-in (3A) */}
+          <button
+            onClick={handleSkipToToday}
+            disabled={completing}
+            className="w-full text-center text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors underline"
+          >
+            Skip recovery — go to today&apos;s check-in
+          </button>
         </div>
       </div>
     </div>

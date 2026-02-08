@@ -102,6 +102,7 @@ export default function WeeklyReflectionConversation({
       exchangeCount,
       previousMessages: messages,
       onDemandIntent,
+      dayMemories: habitData.dayMemories,
     };
   }, [habitData, weekNumber, reflectionType, exchangeCount, messages, onDemandIntent]);
 

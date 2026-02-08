@@ -9,6 +9,8 @@ import {
 } from '@/lib/checkin/conversationGenerator';
 import { ReflectionContext, ReflectionAgentResponse, ReflectionSummary } from '@/lib/ai/prompts/reflectionAgent';
 import { RecoveryCoachContext, RecoveryCoachResponse } from '@/lib/ai/prompts/recoveryCoachAgent';
+import { loadHabitData } from '@/lib/store/habitStore';
+import { daysSince } from '@/lib/dateUtils';
 
 interface Message {
   role: 'ai' | 'user';
@@ -102,7 +104,10 @@ export default function CheckInConversation({
    * Build context for the API call (same shape for both modes)
    */
   const buildContext = useCallback((): ReflectionContext | RecoveryCoachContext => {
-    return {
+    const habitData = loadHabitData();
+    const dayMemories = habitData.dayMemories;
+
+    const base = {
       checkIn,
       patterns,
       system,
@@ -110,8 +115,23 @@ export default function CheckInConversation({
       realLeverage: realLeverage || null,
       exchangeCount,
       previousMessages: messages,
+      dayMemories,
     };
-  }, [checkIn, patterns, system, userGoal, realLeverage, exchangeCount, messages]);
+
+    // For recovery mode, compute daysSinceLastCheckIn (3B)
+    if (mode === 'recovery') {
+      let daysSinceLastCheckIn: number | undefined;
+      const checkIns = habitData.checkIns || [];
+      if (checkIns.length > 0) {
+        const sorted = [...checkIns].sort((a, b) => b.date.localeCompare(a.date));
+        const gap = daysSince(sorted[0].date);
+        if (gap > 1) daysSinceLastCheckIn = gap;
+      }
+      return { ...base, daysSinceLastCheckIn } as RecoveryCoachContext;
+    }
+
+    return base as ReflectionContext;
+  }, [checkIn, patterns, system, userGoal, realLeverage, exchangeCount, messages, mode]);
 
   /**
    * Call the conversation API (reflection or recovery based on mode)
@@ -228,14 +248,9 @@ export default function CheckInConversation({
     let reflectionSummary: ReflectionSummary | undefined;
 
     if (useAI) {
-      // Build context with updated messages
+      // Build context with updated messages (includes dayMemories + daysSinceLastCheckIn)
       const context = {
-        checkIn,
-        patterns,
-        system,
-        userGoal: userGoal || null,
-        realLeverage: realLeverage || null,
-        exchangeCount,
+        ...buildContext(),
         previousMessages: [...messages, userMsg],
       };
 
@@ -313,7 +328,7 @@ export default function CheckInConversation({
       setSuggestedReplies(newSuggestedReplies);
     }
   }, [
-    isTyping, useAI, checkIn, patterns, system, userGoal, realLeverage,
+    isTyping, useAI, buildContext,
     exchangeCount, messages, callConversationAPI, mode, config.minExchangesForClose,
     extractRecoveryFields,
   ]);

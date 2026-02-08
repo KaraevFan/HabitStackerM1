@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { CheckIn, getCheckInState } from '@/types/habit';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 interface MonthCalendarProps {
   checkIns: CheckIn[];
@@ -99,7 +100,7 @@ function getMonthDays(year: number, month: number): (Date | null)[] {
  * Format date as YYYY-MM-DD
  */
 function toDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return getLocalDateString(date);
 }
 
 /**

@@ -1,6 +1,7 @@
 'use client';
 
 import { RepLog, CheckIn, getCheckInState } from '@/types/habit';
+import { getLocalDateString } from '@/lib/dateUtils';
 
 interface SevenDayDotsProps {
   repLogs?: RepLog[];
@@ -20,7 +21,7 @@ function getDayLabel(date: Date): string {
  * Get date string in YYYY-MM-DD format
  */
 function getDateString(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return getLocalDateString(date);
 }
 
 type DotState = 'completed' | 'recovered' | 'missed' | 'no_trigger' | 'empty' | 'future';

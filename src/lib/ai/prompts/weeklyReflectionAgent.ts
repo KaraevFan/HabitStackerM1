@@ -16,8 +16,9 @@
  * - recovery: empathy-first ("I noticed a few tough days")
  */
 
-import { HabitSystem, CheckIn, WeeklyReflection } from '@/types/habit';
+import { HabitSystem, CheckIn, WeeklyReflection, DayMemory } from '@/types/habit';
 import { CheckInPatterns } from '@/lib/patterns/patternFinder';
+import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE } from '@/lib/ai/memoryContext';
 
 /**
  * Context passed to the weekly reflection agent
@@ -36,6 +37,8 @@ export interface WeeklyReflectionContext {
   previousMessages: Array<{ role: 'ai' | 'user'; content: string }>;
   // On-demand context
   onDemandIntent?: string;
+  // Rolling context from previous days (R19)
+  dayMemories?: DayMemory[];
 }
 
 /**
@@ -151,6 +154,9 @@ Set to true when:
 - Include one "done" option
 - Set to null only when free-form input is needed
 
+## Memory guidance
+${MEMORY_SYSTEM_GUIDANCE}
+
 ## Continuity language
 Never say "streak" — use "reps", "in a row", "showing up", "continuity".
 `;
@@ -206,6 +212,10 @@ Stats (last 7 days):
     prompt += `\nUser's intent for this conversation: "${onDemandIntent}"\n`;
   }
 
+  if (context.dayMemories && context.dayMemories.length > 0) {
+    prompt += `\n## Recent conversation history\n${buildMemoryContext(context.dayMemories)}\n`;
+  }
+
   if (context.previousReflections.length > 0) {
     const last = context.previousReflections[context.previousReflections.length - 1];
     prompt += `\nLast reflection: Week ${last.weekNumber}, sustainability: ${last.sustainability}`;
@@ -245,9 +255,12 @@ export function buildWeeklyReflectionUserPrompt(
   context: WeeklyReflectionContext,
   userMessage: string
 ): string {
-  const { system, patterns, weekNumber, reflectionType, exchangeCount, previousMessages } = context;
+  const { system, patterns, weekNumber, reflectionType, exchangeCount, previousMessages, dayMemories } = context;
 
-  let contextBlock = `## Context
+  let contextBlock = `## What you and the user have discussed recently
+${buildMemoryContext(dayMemories)}
+
+## Context
 
 Habit: "${system.anchor}" → "${system.action}"
 Recovery: "${system.recovery}"

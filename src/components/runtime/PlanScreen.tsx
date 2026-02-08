@@ -14,12 +14,16 @@ import DayDetailSheet from "@/components/journey/DayDetailSheet";
 import ToolkitSection from "@/components/self/ToolkitSection";
 import ConfirmationSheet from "@/components/common/ConfirmationSheet";
 import MenuSheet from "@/components/common/MenuSheet";
+import BackfillCard from "@/components/runtime/BackfillCard";
+import WelcomeBackCard from "@/components/runtime/WelcomeBackCard";
 import { HabitData, getPlanScreenState, getHabitEmoji, getSetupProgress, normalizeThenSteps, CheckIn } from "@/types/habit";
 import { formatRitualStatement } from "@/lib/format";
+import { getLocalDateString, getYesterdayDateString } from "@/lib/dateUtils";
 import { toggleSetupItem, markSetupItemNA, getLatestPatternSnapshot } from "@/lib/store/habitStore";
 import { analyzePatterns } from "@/lib/patterns/patternFinder";
 import { applySystemUpdate, SystemUpdateField } from "@/lib/store/systemUpdater";
 import { useReflectionTrigger, getReflectionPrompt } from "@/hooks/useReflectionTrigger";
+import { getUserState } from "@/hooks/useUserState";
 
 interface PlanScreenProps {
   habitData: HabitData;
@@ -30,17 +34,14 @@ type TabId = 'system' | 'journey' | 'self' | null;
 function formatLastDone(lastDoneDate: string | null): string {
   if (!lastDoneDate) return "—";
 
-  const today = new Date().toISOString().split("T")[0];
-  if (lastDoneDate === today) return "Today";
+  if (lastDoneDate === getLocalDateString()) return "Today";
+  if (lastDoneDate === getYesterdayDateString()) return "Yesterday";
 
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
-  if (lastDoneDate === yesterdayStr) return "Yesterday";
-
-  const date = new Date(lastDoneDate);
+  const date = new Date(lastDoneDate + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
   const diffDays = Math.floor(
-    (new Date().getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+    (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
   );
   return `${diffDays} days ago`;
 }
@@ -175,6 +176,11 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
     setDayDetailCheckIn(null);
   };
 
+  const handleDayDetailSave = (updated: HabitData) => {
+    setHabitData(updated);
+    closeDayDetail();
+  };
+
   // Check if setup checklist is incomplete
   const setupProgress = getSetupProgress(system?.setupChecklist);
   const hasIncompleteSetup = setupProgress.total > 0 && setupProgress.completed < setupProgress.total;
@@ -189,6 +195,11 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
 
   // CTA text based on habit type
   const primaryCTAText = isReactiveHabit ? 'How was last night?' : "Mark today's rep";
+
+  // Check if user needs backfill or reentry
+  const currentUserState = getUserState(habitData);
+  const showBackfill = currentUserState === 'missed_yesterday';
+  const showWelcomeBack = currentUserState === 'needs_reentry';
 
   // Pattern action handlers
   const handlePatternAction = (actionType: string) => {
@@ -262,7 +273,22 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
         </div>
       </section>
 
-      {/* Primary CTA - Dominant */}
+      {/* Backfill disambiguation — shown when yesterday has no check-in */}
+      {showBackfill && (
+        <section style={{ marginBottom: '16px' }}>
+          <BackfillCard habitData={habitData} onResolved={setHabitData} />
+        </section>
+      )}
+
+      {/* Welcome back — shown when inactive 7+ days */}
+      {showWelcomeBack && (
+        <section style={{ marginBottom: '16px' }}>
+          <WelcomeBackCard habitData={habitData} onResolved={setHabitData} />
+        </section>
+      )}
+
+      {/* Primary CTA - Dominant (hidden when backfill/reentry card shown) */}
+      {!showBackfill && !showWelcomeBack && (
       <section className="primary-action">
         <Link href="/today" className="block w-full">
           <Button size="lg" variant="primary" className="btn-large">
@@ -293,6 +319,7 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
           )}
         </div>
       </section>
+      )}
 
       {/* Stats - Smaller, below CTA */}
       <div className="stats-row">
@@ -460,6 +487,8 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
             onClose={closeDayDetail}
             checkIn={dayDetailCheckIn}
             date={dayDetailDate}
+            habitType={system?.habitType}
+            onSave={handleDayDetailSave}
           />
         </div>
       )}

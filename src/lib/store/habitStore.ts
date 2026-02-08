@@ -1,5 +1,6 @@
 import {
   HabitData,
+  DayMemory,
   RepEvent,
   RepLog,
   HabitSystem,
@@ -15,8 +16,11 @@ import {
   WeeklyReflection,
   PatternSnapshot,
 } from "@/types/habit";
+import { getLocalDateString } from "@/lib/dateUtils";
 
 const STORAGE_KEY = "habit-stacker-data";
+const BACKUP_KEY = "habit-stacker-data-backup";
+const BACKUP_TIMESTAMP_KEY = "habit-stacker-backup-timestamp";
 
 /**
  * Load habit data from localStorage
@@ -28,11 +32,35 @@ export function loadHabitData(): HabitData {
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return createInitialHabitData();
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && parsed.state) return parsed as HabitData;
     }
-    return JSON.parse(stored) as HabitData;
+
+    // Primary is empty or invalid — check backup
+    const backup = localStorage.getItem(BACKUP_KEY);
+    if (backup) {
+      const parsedBackup = JSON.parse(backup);
+      if (parsedBackup && parsedBackup.state) {
+        // Flag that we need to prompt the user
+        return { ...parsedBackup, _needsRestoreConfirmation: true } as HabitData;
+      }
+    }
+
+    return createInitialHabitData();
   } catch {
+    // Parse failure — try backup
+    try {
+      const backup = localStorage.getItem(BACKUP_KEY);
+      if (backup) {
+        const parsedBackup = JSON.parse(backup);
+        if (parsedBackup && parsedBackup.state) {
+          return { ...parsedBackup, _needsRestoreConfirmation: true } as HabitData;
+        }
+      }
+    } catch {
+      // Both corrupted
+    }
     console.error("Failed to load habit data from localStorage");
     return createInitialHabitData();
   }
@@ -45,10 +73,20 @@ export function saveHabitData(data: HabitData): void {
   if (typeof window === "undefined") return;
 
   try {
-    const updated = { ...data, updatedAt: new Date().toISOString() };
+    // Backup current state BEFORE overwriting
+    const existing = localStorage.getItem(STORAGE_KEY);
+    if (existing) {
+      localStorage.setItem(BACKUP_KEY, existing);
+      localStorage.setItem(BACKUP_TIMESTAMP_KEY, new Date().toISOString());
+    }
+
+    // Strip restore flag before saving
+    const { _needsRestoreConfirmation, ...cleanData } = data as HabitData & { _needsRestoreConfirmation?: boolean };
+    const updated = { ...cleanData, updatedAt: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   } catch (error) {
     console.error("Failed to save habit data to localStorage", error);
+    throw new Error('Failed to save your data. Your browser storage may be full.');
   }
 }
 
@@ -81,15 +119,15 @@ export function logEvent(type: RepEvent["type"], note?: string): HabitData {
   // Update state and counts based on event type
   if (type === "rep_done") {
     updates.repsCount = current.repsCount + 1;
-    updates.lastDoneDate = new Date().toISOString().split("T")[0];
+    updates.lastDoneDate = getLocalDateString();
     updates.state = "active";
     updates.missedDate = null;
   } else if (type === "miss") {
     updates.state = "missed";
-    updates.missedDate = new Date().toISOString().split("T")[0];
+    updates.missedDate = getLocalDateString();
   } else if (type === "recovery_done") {
     updates.repsCount = current.repsCount + 1;
-    updates.lastDoneDate = new Date().toISOString().split("T")[0];
+    updates.lastDoneDate = getLocalDateString();
     updates.state = "active";
     updates.missedDate = null;
   } else if (type === "skip") {
@@ -152,6 +190,50 @@ export function resetHabitData(): HabitData {
 }
 
 /**
+ * Export habit data as JSON string (for manual download)
+ */
+export function exportHabitData(): string {
+  const data = loadHabitData();
+  return JSON.stringify(data, null, 2);
+}
+
+/**
+ * Restore data from backup key
+ */
+export function restoreFromBackup(): HabitData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const backup = localStorage.getItem(BACKUP_KEY);
+    if (!backup) return null;
+    const parsed = JSON.parse(backup);
+    if (parsed && parsed.state) {
+      localStorage.setItem(STORAGE_KEY, backup);
+      return parsed as HabitData;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear backup and restore flag (user chose "Start fresh")
+ */
+export function clearBackup(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(BACKUP_KEY);
+  localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
+}
+
+/**
+ * Get backup timestamp if backup exists
+ */
+export function getBackupTimestamp(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(BACKUP_TIMESTAMP_KEY);
+}
+
+/**
  * Check if user needs re-entry flow (inactive for 7+ days)
  */
 export function needsReentry(): boolean {
@@ -204,7 +286,7 @@ export function logRep(
   // Update state and counts based on rep type
   if (type === "done") {
     updates.repsCount = current.repsCount + 1;
-    updates.lastDoneDate = new Date().toISOString().split("T")[0];
+    updates.lastDoneDate = getLocalDateString();
     updates.state = "active";
     updates.missedDate = null;
 
@@ -214,10 +296,10 @@ export function logRep(
     }
   } else if (type === "missed") {
     updates.state = "missed";
-    updates.missedDate = new Date().toISOString().split("T")[0];
+    updates.missedDate = getLocalDateString();
   } else if (type === "recovery") {
     updates.repsCount = current.repsCount + 1;
-    updates.lastDoneDate = new Date().toISOString().split("T")[0];
+    updates.lastDoneDate = getLocalDateString();
     updates.state = "active";
     updates.missedDate = null;
   }
@@ -336,64 +418,58 @@ export function markSetupItemNA(itemId: string): HabitData {
  * For time/event habits, triggerOccurred defaults to true.
  */
 export function logCheckIn(
-  checkInData: Omit<CheckIn, 'id' | 'checkedInAt'>
+  checkInData: Omit<CheckIn, 'id' | 'checkedInAt'>,
+  dateOverride?: string  // YYYY-MM-DD, defaults to getLocalDateString()
 ): HabitData {
+  // Atomic read-modify-write: load fresh data, mutate checkIns, save in one shot.
+  // This avoids race conditions where a stale checkIns array overwrites newer data.
   const current = loadHabitData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = dateOverride || getLocalDateString();
+  const currentCheckIns = current.checkIns || [];
 
-  // Guard: if today already has a check-in, update it instead of creating a duplicate
-  const existingToday = (current.checkIns || []).find(c => c.date === today);
+  // Guard: if target date already has a check-in, update it instead of creating a duplicate
+  const existingToday = currentCheckIns.find(c => c.date === today);
+
+  let checkIns: CheckIn[];
+  let checkInState: string;
+
   if (existingToday) {
-    const checkIns = (current.checkIns || []).map(c =>
+    checkIns = currentCheckIns.map(c =>
       c.id === existingToday.id ? { ...c, ...checkInData, date: today } : c
     );
-    const state = getCheckInState({ ...existingToday, ...checkInData });
-    const updates: Partial<HabitData> = {
-      checkIns,
-      lastActiveDate: new Date().toISOString(),
+    checkInState = getCheckInState({ ...existingToday, ...checkInData });
+  } else {
+    const checkIn: CheckIn = {
+      ...checkInData,
+      id: generateCheckInId(),
+      checkedInAt: new Date().toISOString(),
+      date: today,
     };
-    if (state === 'completed' || state === 'recovered') {
-      updates.repsCount = current.repsCount + 1;
-      updates.lastDoneDate = today;
-      updates.state = 'active';
-      updates.missedDate = null;
-    } else if (state === 'missed') {
-      updates.state = 'missed';
-      updates.missedDate = today;
-    }
-    return updateHabitData(updates);
+    checkIns = [...currentCheckIns, checkIn];
+    checkInState = getCheckInState(checkIn);
   }
 
-  const checkIn: CheckIn = {
-    ...checkInData,
-    id: generateCheckInId(),
-    checkedInAt: new Date().toISOString(),
-    date: today,
-  };
-
-  // Add to check-ins array
-  const checkIns = [...(current.checkIns || []), checkIn];
-
-  const updates: Partial<HabitData> = {
+  // Build a complete updated object and save directly (no second load)
+  const updated: HabitData = {
+    ...current,
     checkIns,
     lastActiveDate: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
-  // Update state/counts based on check-in state
-  const state = getCheckInState(checkIn);
-
-  if (state === 'completed' || state === 'recovered') {
-    updates.repsCount = current.repsCount + 1;
-    updates.lastDoneDate = today;
-    updates.state = 'active';
-    updates.missedDate = null;
-  } else if (state === 'missed') {
-    updates.state = 'missed';
-    updates.missedDate = today;
+  if (checkInState === 'completed' || checkInState === 'recovered') {
+    updated.repsCount = current.repsCount + 1;
+    updated.lastDoneDate = today;
+    updated.state = 'active';
+    updated.missedDate = null;
+  } else if (checkInState === 'missed') {
+    updated.state = 'missed';
+    updated.missedDate = today;
   }
   // 'no_trigger' doesn't change state/counts but is still valuable data
 
-  return updateHabitData(updates);
+  saveHabitData(updated);
+  return updated;
 }
 
 /**
@@ -401,7 +477,7 @@ export function logCheckIn(
  */
 export function getTodayCheckIn(): CheckIn | null {
   const current = loadHabitData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   return current.checkIns?.find((c) => c.date === today) || null;
 }
 
@@ -423,7 +499,7 @@ export function getRecentCheckIns(days: number = 7): CheckIn[] {
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
-  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+  const cutoffStr = getLocalDateString(cutoffDate);
 
   return current.checkIns
     .filter((c) => c.date >= cutoffStr)
@@ -442,7 +518,7 @@ export function getWeekCheckIns(): CheckIn[] {
  */
 export function acceptRecovery(): HabitData {
   const current = loadHabitData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   // Find today's check-in
   const checkIns = current.checkIns?.map((c) =>
@@ -457,7 +533,7 @@ export function acceptRecovery(): HabitData {
  */
 export function completeRecovery(): HabitData {
   const current = loadHabitData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   // Find today's check-in and mark recovery completed
   const checkIns = current.checkIns?.map((c) =>
@@ -483,7 +559,7 @@ export function updateTodayCheckIn(
   updates: Partial<Pick<CheckIn, 'difficultyRating' | 'note' | 'outcomeSuccess' | 'missReason' | 'systemChangeProposed'>>
 ): HabitData {
   const current = loadHabitData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   const checkIns = current.checkIns?.map((c) =>
     c.date === today ? { ...c, ...updates } : c
@@ -553,6 +629,102 @@ export function updateCheckInConversation(
 }
 
 // ============================================
+// BACKFILL FUNCTIONS
+// ============================================
+
+/**
+ * Recalculate repsCount and lastDoneDate from all check-ins.
+ * Used after backfill to ensure consistency.
+ */
+function recalculateStats(checkIns: CheckIn[]): { repsCount: number; lastDoneDate: string | null } {
+  let repsCount = 0;
+  let lastDoneDate: string | null = null;
+
+  for (const checkIn of checkIns) {
+    const state = getCheckInState(checkIn);
+    if (state === 'completed' || state === 'recovered') {
+      repsCount++;
+      if (!lastDoneDate || checkIn.date > lastDoneDate) {
+        lastDoneDate = checkIn.date;
+      }
+    }
+  }
+
+  return { repsCount, lastDoneDate };
+}
+
+/**
+ * Log or update a check-in for a specific date (backfill).
+ * Unlike logCheckIn(), this takes an explicit date and recalculates stats
+ * from all check-ins rather than incrementing.
+ * Only touches habit state if backfilling today.
+ */
+export function logBackfillCheckIn(
+  date: string,
+  checkInData: Partial<Pick<CheckIn, 'triggerOccurred' | 'actionTaken' | 'note' | 'difficulty' | 'difficultyRating' | 'missReason'>>
+): HabitData {
+  const current = loadHabitData();
+  const today = getLocalDateString();
+  const currentCheckIns = current.checkIns || [];
+
+  const existing = currentCheckIns.find(c => c.date === date);
+
+  let checkIns: CheckIn[];
+
+  if (existing) {
+    // Merge into existing check-in
+    checkIns = currentCheckIns.map(c =>
+      c.id === existing.id ? { ...c, ...checkInData } : c
+    );
+  } else {
+    // Create new check-in for that date
+    const newCheckIn: CheckIn = {
+      id: generateCheckInId(),
+      checkedInAt: new Date().toISOString(),
+      date,
+      triggerOccurred: checkInData.triggerOccurred ?? true,
+      actionTaken: checkInData.actionTaken ?? false,
+      recoveryOffered: false,
+      note: checkInData.note,
+      difficulty: checkInData.difficulty,
+      difficultyRating: checkInData.difficultyRating,
+      missReason: checkInData.missReason,
+    };
+    checkIns = [...currentCheckIns, newCheckIn];
+  }
+
+  // Recalculate stats from all check-ins
+  const stats = recalculateStats(checkIns);
+
+  const updated: HabitData = {
+    ...current,
+    checkIns,
+    repsCount: stats.repsCount,
+    lastDoneDate: stats.lastDoneDate,
+    lastActiveDate: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Only touch habit state if backfilling today
+  if (date === today) {
+    const todayCheckIn = checkIns.find(c => c.date === today);
+    if (todayCheckIn) {
+      const state = getCheckInState(todayCheckIn);
+      if (state === 'completed' || state === 'recovered') {
+        updated.state = 'active';
+        updated.missedDate = null;
+      } else if (state === 'missed') {
+        updated.state = 'missed';
+        updated.missedDate = today;
+      }
+    }
+  }
+
+  saveHabitData(updated);
+  return updated;
+}
+
+// ============================================
 // REFLECTION SYSTEM FUNCTIONS (R18)
 // ============================================
 
@@ -561,17 +733,21 @@ export function updateCheckInConversation(
  */
 export function saveReflection(reflection: WeeklyReflection): HabitData {
   const current = loadHabitData();
-  const reflections = [...(current.reflections || []), reflection];
 
   // Compute next reflection due (7 days from now)
   const nextDue = new Date();
   nextDue.setDate(nextDue.getDate() + 7);
 
-  return updateHabitData({
-    reflections,
+  // Atomic save — don't go through updateHabitData to avoid stale array overwrite
+  const updated: HabitData = {
+    ...current,
+    reflections: [...(current.reflections || []), reflection],
     lastReflectionDate: new Date().toISOString(),
     nextReflectionDue: nextDue.toISOString(),
-  });
+    updatedAt: new Date().toISOString(),
+  };
+  saveHabitData(updated);
+  return updated;
 }
 
 // ============================================
@@ -583,12 +759,16 @@ export function saveReflection(reflection: WeeklyReflection): HabitData {
  */
 export function savePatternSnapshot(snapshot: PatternSnapshot): HabitData {
   const current = loadHabitData();
-  const history = [...(current.patternHistory || []), snapshot];
 
-  return updateHabitData({
-    patternHistory: history,
+  // Atomic save — don't go through updateHabitData to avoid stale array overwrite
+  const updated: HabitData = {
+    ...current,
+    patternHistory: [...(current.patternHistory || []), snapshot],
     latestPatternGeneratedAt: snapshot.generatedAt,
-  });
+    updatedAt: new Date().toISOString(),
+  };
+  saveHabitData(updated);
+  return updated;
 }
 
 /**
@@ -629,6 +809,17 @@ export function shouldRegeneratePatterns(): boolean {
 // ============================================
 
 /**
+ * Skip recovery and restore active state.
+ * Used by recovery escape hatch and backfill disambiguation.
+ */
+export function skipRecovery(): HabitData {
+  return updateHabitData({
+    state: 'active',
+    missedDate: null,
+  });
+}
+
+/**
  * Graduate current habit to maintained state
  */
 export function graduateHabit(): HabitData {
@@ -667,7 +858,7 @@ export function updateTodayConversation(
   }
 ): HabitData {
   const current = loadHabitData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   const checkIns = current.checkIns?.map((c) =>
     c.date === today
@@ -685,4 +876,34 @@ export function updateTodayConversation(
   ) || [];
 
   return updateHabitData({ checkIns });
+}
+
+// ============================================
+// DAY MEMORY FUNCTIONS (R19)
+// ============================================
+
+/**
+ * Save a DayMemory entry
+ */
+export function saveDayMemory(memory: DayMemory): HabitData {
+  const current = loadHabitData();
+  const existing = current.dayMemories || [];
+
+  // Replace if same date exists, otherwise append
+  const idx = existing.findIndex(m => m.date === memory.date);
+  let dayMemories: DayMemory[];
+  if (idx >= 0) {
+    dayMemories = [...existing];
+    dayMemories[idx] = memory;
+  } else {
+    dayMemories = [...existing, memory];
+  }
+
+  const updated: HabitData = {
+    ...current,
+    dayMemories,
+    updatedAt: new Date().toISOString(),
+  };
+  saveHabitData(updated);
+  return updated;
 }

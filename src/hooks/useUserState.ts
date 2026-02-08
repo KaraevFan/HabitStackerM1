@@ -2,6 +2,8 @@
 
 import { useMemo } from 'react';
 import { HabitData } from '@/types/habit';
+import { getLocalDateString, getYesterdayDateString } from '@/lib/dateUtils';
+import { needsReentry } from '@/lib/store/habitStore';
 
 /**
  * User lifecycle states for routing
@@ -13,7 +15,8 @@ export type UserState =
   | 'active_today'       // Has habit, ready for today's action
   | 'completed_today'    // Already did today's rep
   | 'missed_yesterday'   // Missed yesterday, needs recovery
-  | 'needs_tuneup';      // Completed first rep, tune-up available
+  | 'needs_tuneup'       // Completed first rep, tune-up available
+  | 'needs_reentry';     // Inactive 7+ days, welcome-back flow
 
 /**
  * Check if user missed yesterday
@@ -21,15 +24,14 @@ export type UserState =
 function didMissYesterday(habitData: HabitData): boolean {
   if (!habitData.lastDoneDate) return false;
 
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const yesterdayStr = getYesterdayDateString();
 
-  const lastDone = habitData.lastDoneDate;
+  // Check if yesterday specifically has a check-in (not just date comparison)
+  const hasYesterdayCheckIn = habitData.checkIns?.some(c => c.date === yesterdayStr);
+  if (hasYesterdayCheckIn) return false; // They logged yesterday, even if it was a miss
 
-  // If last done was before yesterday, they missed
-  return lastDone < yesterdayStr;
+  // If last done is before yesterday and no check-in exists for yesterday
+  return habitData.lastDoneDate < yesterdayStr;
 }
 
 /**
@@ -37,8 +39,7 @@ function didMissYesterday(habitData: HabitData): boolean {
  */
 function didCompleteToday(habitData: HabitData): boolean {
   if (!habitData.lastDoneDate) return false;
-  const todayStr = new Date().toISOString().split('T')[0];
-  return habitData.lastDoneDate === todayStr;
+  return habitData.lastDoneDate === getLocalDateString();
 }
 
 /**
@@ -66,6 +67,11 @@ export function getUserState(habitData: HabitData | null): UserState {
   if (habitData.state === 'designed' ||
       (habitData.system && habitData.repsCount === 0)) {
     return 'system_designed';
+  }
+
+  // Check for reentry (7+ days inactive) — before missed_yesterday
+  if (needsReentry()) {
+    return 'needs_reentry';
   }
 
   // Check for missed state
@@ -115,7 +121,9 @@ export function getRouteForState(state: UserState): string {
     case 'system_designed':
       return '/'; // Shows "Ready to start" prompt
     case 'missed_yesterday':
-      return '/recovery';
+      return '/'; // Handled by backfill disambiguation on home screen
+    case 'needs_reentry':
+      return '/'; // Welcome-back flow on home screen
     case 'needs_tuneup':
     case 'active_today':
     case 'completed_today':

@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useMemo } from 'react';
 import { CheckIn } from '@/types/habit';
+import { getLocalDateString } from '@/lib/dateUtils';
 import DayCard from './DayCard';
 
 interface DayTimelineProps {
@@ -37,7 +38,7 @@ export default function DayTimeline({
   }, [checkIns]);
 
   // Get today's date string
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const today = useMemo(() => getLocalDateString(), []);
 
   // Scroll to selected date when it changes
   useEffect(() => {

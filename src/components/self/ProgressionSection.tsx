@@ -19,8 +19,8 @@ export default function ProgressionSection({
     (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24)
   );
 
-  // Gate: show placeholder before day 7
-  if (daysSince < 7) {
+  // Gate: show placeholder before completing the first week (day 1 = daysSince 0)
+  if (daysSince < 6) {
     return (
       <div className="space-y-4">
         <p className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
