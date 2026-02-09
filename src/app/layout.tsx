@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Outfit, JetBrains_Mono } from "next/font/google";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import "./globals.css";
 
 // Display font - warm serif for headings
@@ -42,7 +43,9 @@ export default function RootLayout({
         className={`${fraunces.variable} ${outfit.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <div className="app-frame">
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </div>
       </body>
     </html>
