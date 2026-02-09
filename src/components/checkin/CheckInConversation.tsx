@@ -205,9 +205,23 @@ export default function CheckInConversation({
         return;
       }
 
-      // AI failed, fall back to rule-based
-      console.log(`[CheckInConversation:${mode}] AI failed, using rule-based opener`);
+      // AI failed, fall back to rule-based (or static recovery)
+      console.log(`[CheckInConversation:${mode}] AI failed, using fallback opener`);
       setUseAI(false);
+
+      // For recovery mode, show static recovery action if available
+      if (mode === 'recovery') {
+        const habitData = loadHabitData();
+        if (habitData?.system?.recovery) {
+          setMessages([{
+            role: 'ai',
+            content: `Your coach is unavailable right now. Here's your recovery action:\n\n${habitData.system.recovery}\n\nDid you do it?`,
+          }]);
+          setSuggestedReplies(['Done', 'Not yet']);
+          setIsTyping(false);
+          return;
+        }
+      }
     }
 
     // Rule-based fallback
@@ -225,6 +239,34 @@ export default function CheckInConversation({
 
     return () => clearTimeout(timer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Typing safety timeout: if typing persists for 20s, show fallback
+  useEffect(() => {
+    if (!isTyping) return;
+    const timer = setTimeout(() => {
+      setIsTyping(false);
+      if (messages.length === 0) {
+        // AI failed to produce opening message — show static fallback
+        const habitData = loadHabitData();
+        if (mode === 'recovery' && habitData?.system?.recovery) {
+          setMessages([{
+            role: 'ai',
+            content: `Your coach is unavailable right now. Here's your recovery action:\n\n${habitData.system.recovery}\n\nDid you do it?`,
+          }]);
+          setSuggestedReplies(['Done', 'Not yet']);
+        } else {
+          setMessages([{
+            role: 'ai',
+            content: mode === 'recovery'
+              ? "Couldn't connect right now. Your check-in was saved."
+              : "Let's keep going \u2014 your check-in is saved.",
+          }]);
+        }
+      }
+      setReadyToClose(true);
+    }, 20_000);
+    return () => clearTimeout(timer);
+  }, [isTyping, messages.length, mode]);
 
   // Scroll to bottom when messages change
   useEffect(() => {

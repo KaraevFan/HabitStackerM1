@@ -9,9 +9,18 @@
 export async function readSSEResponse<T>(
   response: Response,
   onMessage?: (partialMessage: string) => void,
+  timeoutMs: number = 30_000,
 ): Promise<T> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
+
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const resetTimeout = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => reader.cancel(), timeoutMs);
+  };
+
+  resetTimeout();
 
   const decoder = new TextDecoder();
   let buffer = '';
@@ -22,6 +31,7 @@ export async function readSSEResponse<T>(
     const { done, value } = await reader.read();
     if (done) break;
 
+    resetTimeout();
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
@@ -67,6 +77,8 @@ export async function readSSEResponse<T>(
       }
     }
   }
+
+  clearTimeout(timeoutId!);
 
   if (!finalResponse) {
     throw new Error('No final response received from stream');
