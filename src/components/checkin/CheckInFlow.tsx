@@ -27,6 +27,7 @@ import CheckInSuccess from './CheckInSuccess';
 import CheckInMiss from './CheckInMiss';
 import RecoveryOffer from './RecoveryOffer';
 import CheckInConversation, { ConversationData } from './CheckInConversation';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 type FlowStep =
   | 'options'                // For reactive: 3-option selector
@@ -410,11 +411,13 @@ export default function CheckInFlow({
   // The user explicitly chooses Done/Missed, which triggers the appropriate handlers
 
   // Render current step
+  let content: React.ReactNode = null;
+
   switch (step) {
     case 'options':
       // Show different options based on habit type
       if (isReactive) {
-        return (
+        content = (
           <CheckInOptions
             habitAction={system.action}
             onNoTrigger={handleNoTrigger}
@@ -425,7 +428,7 @@ export default function CheckInFlow({
         );
       } else {
         // Time-anchored or event-anchored habits
-        return (
+        content = (
           <CheckInOptionsTimeEvent
             habitAction={system.action}
             onCompleted={handleCompleted}
@@ -434,9 +437,10 @@ export default function CheckInFlow({
           />
         );
       }
+      break;
 
     case 'success':
-      return (
+      content = (
         <CheckInSuccess
           title={successContent.title}
           subtitle={successContent.subtitle}
@@ -448,11 +452,12 @@ export default function CheckInFlow({
           onDone={handleSuccessDone}
         />
       );
+      break;
 
     case 'conversation':
       // Show conversation after success/no-trigger
       if (loggedCheckIn) {
-        return (
+        content = (
           <CheckInConversation
             checkIn={loggedCheckIn}
             patterns={patterns}
@@ -463,15 +468,16 @@ export default function CheckInFlow({
             onSkip={handleConversationSkip}
           />
         );
+      } else {
+        // Fallback if no check-in data
+        handleDone();
       }
-      // Fallback if no check-in data
-      handleDone();
-      return null;
+      break;
 
     case 'recovery_conversation':
       // Recovery coach conversation after miss (R16)
       if (loggedCheckIn) {
-        return (
+        content = (
           <CheckInConversation
             mode="recovery"
             checkIn={loggedCheckIn}
@@ -485,28 +491,38 @@ export default function CheckInFlow({
         );
       }
       // Fallback if check-in not yet finalized (e.g., entryMode='miss' still loading)
-      return null;
+      break;
 
     case 'miss_reason':
-      return (
+      content = (
         <CheckInMiss
           isReactiveHabit={isReactive}
           onSelectReason={handleMissReason}
           onSkip={handleSkipMissReason}
         />
       );
+      break;
 
     case 'recovery':
-      return (
+      content = (
         <RecoveryOffer
           recoveryAction={system.recovery}
           onAccept={handleAcceptRecovery}
           onDecline={handleDeclineRecovery}
         />
       );
+      break;
 
     case 'done':
     default:
-      return null;
+      break;
   }
+
+  if (!content) return null;
+
+  return (
+    <ErrorBoundary screenName="CheckInFlow">
+      {content}
+    </ErrorBoundary>
+  );
 }

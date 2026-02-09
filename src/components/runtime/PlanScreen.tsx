@@ -24,6 +24,7 @@ import { analyzePatterns } from "@/lib/patterns/patternFinder";
 import { applySystemUpdate, SystemUpdateField } from "@/lib/store/systemUpdater";
 import { useReflectionTrigger, getReflectionPrompt } from "@/hooks/useReflectionTrigger";
 import { getUserState } from "@/hooks/useUserState";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 interface PlanScreenProps {
   habitData: HabitData;
@@ -237,6 +238,7 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
   const cachedPatterns = typeof window !== 'undefined' ? getLatestPatternSnapshot() : null;
 
   return (
+    <ErrorBoundary screenName="PlanScreen">
     <div className="today-screen">
       {/* Header */}
       <header className="today-header">
@@ -1017,5 +1019,6 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
         }
       `}</style>
     </div>
+    </ErrorBoundary>
   );
 }

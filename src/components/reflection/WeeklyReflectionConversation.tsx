@@ -7,6 +7,7 @@ import {
   WeeklyReflectionContext,
   WeeklyReflectionResponse,
 } from '@/lib/ai/prompts/weeklyReflectionAgent';
+import { readSSEResponse } from '@/lib/ai/sseClient';
 
 interface Message {
   role: 'ai' | 'user';
@@ -111,7 +112,8 @@ export default function WeeklyReflectionConversation({
    */
   const callAPI = useCallback(async (
     context: WeeklyReflectionContext,
-    userMessage?: string
+    userMessage?: string,
+    onMessage?: (partialMessage: string) => void,
   ): Promise<WeeklyReflectionResponse | null> => {
     try {
       const response = await fetch('/api/weekly-reflection', {
@@ -121,7 +123,7 @@ export default function WeeklyReflectionConversation({
       });
 
       if (!response.ok) return null;
-      return await response.json();
+      return await readSSEResponse<WeeklyReflectionResponse>(response, onMessage);
     } catch {
       return null;
     }
@@ -149,7 +151,10 @@ export default function WeeklyReflectionConversation({
     setIsTyping(true);
 
     const context = buildContext();
-    const response = await callAPI(context);
+    const response = await callAPI(context, undefined, (partialMsg) => {
+      setIsTyping(false);
+      setMessages([{ role: 'ai', content: partialMsg }]);
+    });
 
     if (response) {
       setMessages([{ role: 'ai', content: response.message }]);
@@ -202,7 +207,18 @@ export default function WeeklyReflectionConversation({
       previousMessages: [...messages, userMsg],
     };
 
-    const response = await callAPI(context, trimmed);
+    const response = await callAPI(context, trimmed, (partialMsg) => {
+      setIsTyping(false);
+      setMessages(prev => {
+        const updated = [...prev];
+        if (updated.length > 0 && updated[updated.length - 1].role === 'ai') {
+          updated[updated.length - 1] = { role: 'ai', content: partialMsg };
+        } else {
+          updated.push({ role: 'ai', content: partialMsg });
+        }
+        return updated;
+      });
+    });
 
     let aiMsg: Message;
 
@@ -211,7 +227,15 @@ export default function WeeklyReflectionConversation({
       extractData(response);
 
       if (response.shouldClose) {
-        setMessages(prev => [...prev, aiMsg]);
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'ai') {
+            updated[updated.length - 1] = aiMsg;
+          } else {
+            updated.push(aiMsg);
+          }
+          return updated;
+        });
         setReadyToClose(true);
         setIsTyping(false);
         setExchangeCount(prev => prev + 1);
@@ -224,7 +248,16 @@ export default function WeeklyReflectionConversation({
       setSuggestedReplies(["Continue as-is", "Make it easier", "I'm done"]);
     }
 
-    setMessages(prev => [...prev, aiMsg]);
+    // Update or add the AI message (streaming may have already added it)
+    setMessages(prev => {
+      const updated = [...prev];
+      if (updated.length > 0 && updated[updated.length - 1].role === 'ai') {
+        updated[updated.length - 1] = aiMsg;
+      } else {
+        updated.push(aiMsg);
+      }
+      return updated;
+    });
     setIsTyping(false);
     setExchangeCount(prev => prev + 1);
   }, [isTyping, buildContext, exchangeCount, messages, callAPI, extractData]);

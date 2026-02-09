@@ -11,6 +11,7 @@ import { ReflectionContext, ReflectionAgentResponse, ReflectionSummary } from '@
 import { RecoveryCoachContext, RecoveryCoachResponse } from '@/lib/ai/prompts/recoveryCoachAgent';
 import { loadHabitData } from '@/lib/store/habitStore';
 import { daysSince } from '@/lib/dateUtils';
+import { readSSEResponse } from '@/lib/ai/sseClient';
 
 interface Message {
   role: 'ai' | 'user';
@@ -138,7 +139,8 @@ export default function CheckInConversation({
    */
   const callConversationAPI = useCallback(async (
     context: ReflectionContext | RecoveryCoachContext,
-    userMessage?: string
+    userMessage?: string,
+    onMessage?: (partialMessage: string) => void,
   ): Promise<ReflectionAgentResponse | RecoveryCoachResponse | null> => {
     try {
       const response = await fetch(config.apiEndpoint, {
@@ -152,8 +154,7 @@ export default function CheckInConversation({
         return null;
       }
 
-      const data = await response.json();
-      return data;
+      return await readSSEResponse<ReflectionAgentResponse | RecoveryCoachResponse>(response, onMessage);
     } catch (error) {
       console.error(`[CheckInConversation:${mode}] API call failed:`, error);
       return null;
@@ -183,7 +184,10 @@ export default function CheckInConversation({
 
     if (useAI) {
       const context = buildContext();
-      const aiResponse = await callConversationAPI(context);
+      const aiResponse = await callConversationAPI(context, undefined, (partialMsg) => {
+        setIsTyping(false);
+        setMessages([{ role: 'ai', content: partialMsg }]);
+      });
 
       if (aiResponse) {
         setMessages([{ role: 'ai', content: aiResponse.message }]);
@@ -254,7 +258,18 @@ export default function CheckInConversation({
         previousMessages: [...messages, userMsg],
       };
 
-      const aiResponse = await callConversationAPI(context, trimmedContent);
+      const aiResponse = await callConversationAPI(context, trimmedContent, (partialMsg) => {
+        setIsTyping(false);
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'ai') {
+            updated[updated.length - 1] = { role: 'ai', content: partialMsg };
+          } else {
+            updated.push({ role: 'ai', content: partialMsg });
+          }
+          return updated;
+        });
+      });
 
       if (aiResponse) {
         aiMsg = { role: 'ai', content: aiResponse.message };
@@ -304,7 +319,16 @@ export default function CheckInConversation({
       newSuggestedReplies = response.suggestedReplies || [];
     }
 
-    setMessages(prev => [...prev, aiMsg]);
+    // Update or add the AI message (streaming may have already added it)
+    setMessages(prev => {
+      const updated = [...prev];
+      if (updated.length > 0 && updated[updated.length - 1].role === 'ai') {
+        updated[updated.length - 1] = aiMsg;
+      } else {
+        updated.push(aiMsg);
+      }
+      return updated;
+    });
     setIsTyping(false);
     setExchangeCount(prev => prev + 1);
 
