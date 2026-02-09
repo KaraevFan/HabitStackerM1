@@ -11,6 +11,7 @@ import { IntakeAnalytics } from '@/lib/analytics/intakeAnalytics';
 import { HabitSystem, SetupItem } from '@/types/habit';
 import { HabitRecommendation } from '@/lib/ai/prompts/intakeAgent';
 import { formatRitualStatement } from '@/lib/format';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 /**
  * Convert recommendation to HabitSystem
@@ -66,6 +67,14 @@ function recommendationToSystem(
  * Note: Feedback rating moved to post-first-rep (not during onboarding)
  */
 export default function SetupPage() {
+  return (
+    <ErrorBoundary screenName="Setup">
+      <SetupContent />
+    </ErrorBoundary>
+  );
+}
+
+function SetupContent() {
   const router = useRouter();
   const {
     state,

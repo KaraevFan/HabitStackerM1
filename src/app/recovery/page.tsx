@@ -6,8 +6,17 @@ import { loadHabitData, logEvent, skipRecovery } from '@/lib/store/habitStore';
 import { HabitData } from '@/types/habit';
 import { getUserState } from '@/hooks/useUserState';
 import Button from '@/components/ui/Button';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 export default function RecoveryPage() {
+  return (
+    <ErrorBoundary screenName="Recovery">
+      <RecoveryContent />
+    </ErrorBoundary>
+  );
+}
+
+function RecoveryContent() {
   const router = useRouter();
   const [habitData, setHabitData] = useState<HabitData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

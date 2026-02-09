@@ -13,6 +13,7 @@ import BackfillCard from "@/components/runtime/BackfillCard";
 import WelcomeBackCard from "@/components/runtime/WelcomeBackCard";
 import StageTransitionScreen from "@/components/progression/StageTransitionScreen";
 import RestorePrompt from "@/components/common/RestorePrompt";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 /**
  * Home page with state-based routing
@@ -25,6 +26,14 @@ import RestorePrompt from "@/components/common/RestorePrompt";
  * - active_today / completed_today / needs_tuneup → PlanScreen
  */
 export default function Home() {
+  return (
+    <ErrorBoundary screenName="Home">
+      <HomeContent />
+    </ErrorBoundary>
+  );
+}
+
+function HomeContent() {
   const router = useRouter();
   const [habitData, setHabitData] = useState<HabitData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

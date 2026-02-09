@@ -11,16 +11,19 @@ import WeeklyReflectionConversation, {
   ReflectionResult,
 } from '@/components/reflection/WeeklyReflectionConversation';
 import CoachIntentSheet from '@/components/reflection/CoachIntentSheet';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 export default function ReflectPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
-        <div className="size-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin" role="status" aria-label="Loading" />
-      </div>
-    }>
-      <ReflectPageContent />
-    </Suspense>
+    <ErrorBoundary screenName="Reflect">
+      <Suspense fallback={
+        <div className="flex min-h-dvh items-center justify-center bg-[var(--bg-primary)]">
+          <div className="size-8 border-2 border-[var(--bg-tertiary)] border-t-[var(--accent-primary)] rounded-full animate-spin" role="status" aria-label="Loading" />
+        </div>
+      }>
+        <ReflectPageContent />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
