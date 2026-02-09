@@ -8,6 +8,7 @@ import { getUserState } from "@/hooks/useUserState";
 import { shouldShowStageTransition, detectStage, STAGES } from "@/lib/progression/stageDetector";
 import PlanScreen from "@/components/runtime/PlanScreen";
 import WelcomeScreen from "@/components/runtime/WelcomeScreen";
+import { ContextScreen } from "@/components/runtime/ContextScreen";
 import BackfillCard from "@/components/runtime/BackfillCard";
 import WelcomeBackCard from "@/components/runtime/WelcomeBackCard";
 import StageTransitionScreen from "@/components/progression/StageTransitionScreen";
@@ -89,9 +90,9 @@ export default function Home() {
   // Determine what to show based on user state
   const userState = getUserState(habitData);
 
-  // New user → Welcome screen
+  // New user → Context screen (pre-intake explainer)
   if (userState === 'new_user') {
-    return <WelcomeScreen />;
+    return <ContextScreen />;
   }
 
   // Paused state
@@ -191,6 +192,6 @@ export default function Home() {
     return <PlanScreen habitData={habitData} />;
   }
 
-  // Fallback to welcome screen
-  return <WelcomeScreen />;
+  // Fallback to context screen
+  return <ContextScreen />;
 }
