@@ -14,6 +14,14 @@ import {
 } from '@/types/conversation';
 import { ConversationPhase } from '@/lib/ai/prompts/intakeAgent';
 
+// Sync layer hooks — registered by Supabase sync on app init
+type ConversationSaveHook = (state: IntakeState) => void;
+let _onSaveHook: ConversationSaveHook | null = null;
+export function setConversationSaveHook(hook: ConversationSaveHook | null): void { _onSaveHook = hook; }
+
+let _onClearHook: (() => void) | null = null;
+export function setConversationClearHook(hook: (() => void) | null): void { _onClearHook = hook; }
+
 const STORAGE_KEY = 'habit-stacker-conversation';
 
 /**
@@ -40,6 +48,9 @@ export function saveConversation(state: IntakeState): void {
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (_onSaveHook) {
+      try { _onSaveHook(state); } catch { /* ignore */ }
+    }
   } catch (error) {
     console.error('[ConversationStore] Error saving conversation:', error);
   }
@@ -53,6 +64,9 @@ export function clearConversation(): void {
 
   try {
     localStorage.removeItem(STORAGE_KEY);
+    if (_onClearHook) {
+      try { _onClearHook(); } catch { /* ignore */ }
+    }
   } catch (error) {
     console.error('[ConversationStore] Error clearing conversation:', error);
   }

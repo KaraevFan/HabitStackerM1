@@ -18,6 +18,11 @@ import {
 } from "@/types/habit";
 import { getLocalDateString } from "@/lib/dateUtils";
 
+// Sync layer hook — registered by Supabase sync on app init
+type SaveHook = (data: HabitData) => void;
+let _onSaveHook: SaveHook | null = null;
+export function setOnSaveHook(hook: SaveHook | null): void { _onSaveHook = hook; }
+
 const STORAGE_KEY = "habit-stacker-data";
 const BACKUP_KEY = "habit-stacker-data-backup";
 const BACKUP_TIMESTAMP_KEY = "habit-stacker-backup-timestamp";
@@ -84,6 +89,11 @@ export function saveHabitData(data: HabitData): void {
     const { _needsRestoreConfirmation, ...cleanData } = data as HabitData & { _needsRestoreConfirmation?: boolean };
     const updated = { ...cleanData, updatedAt: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    // Notify sync layer
+    if (_onSaveHook) {
+      try { _onSaveHook(updated); } catch { /* sync failures don't break saves */ }
+    }
   } catch (error) {
     console.error("Failed to save habit data to localStorage", error);
     throw new Error('Failed to save your data. Your browser storage may be full.');
