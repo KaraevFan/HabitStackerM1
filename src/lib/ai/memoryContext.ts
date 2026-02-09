@@ -1,6 +1,23 @@
 import { DayMemory } from '@/types/habit';
 
 /**
+ * Translate a numeric difficulty rating to a natural-language label.
+ * Scale: 1 = Hard, 5 = Easy. Never show raw numbers to the AI.
+ */
+export function difficultyLabel(rating: number): string {
+  if (rating <= 1.5) return 'Hard (1/5)';
+  if (rating <= 2.5) return 'Somewhat hard (2/5)';
+  if (rating <= 3.5) return 'OK (3/5)';
+  if (rating <= 4.5) return 'Fairly easy (4/5)';
+  return 'Easy (5/5)';
+}
+
+/**
+ * Difficulty scale explanation to inject into AI prompts.
+ */
+export const DIFFICULTY_SCALE_NOTE = 'Difficulty scale: 1 = Hard, 5 = Easy. Higher numbers mean easier.';
+
+/**
  * Build a context string from recent DayMemory entries.
  * Used to give AI agents continuity across daily conversations.
  */

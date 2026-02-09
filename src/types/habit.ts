@@ -377,6 +377,9 @@ export interface HabitSystem {
   tunedAt?: string; // ISO date when tune-up completed
   tuneCount?: number; // How many times user has re-tuned
 
+  // Habit domain for domain-specific coaching knowledge (R20)
+  domain?: string; // e.g., "financial_awareness", "sleep", "exercise", "reading"
+
   // Reminder settings (R14 - data model now, push notifications later)
   reminderTime?: string;  // "20:00" - extracted from intake conversation
   reminderLabel?: string; // "Money check" - label for the reminder

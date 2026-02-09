@@ -155,7 +155,11 @@ export async function POST(request: NextRequest) {
     }
 
     const config = getProviderConfig();
-    const systemPrompt = buildWeeklyReflectionSystemPrompt(context.reflectionType);
+    const systemPrompt = buildWeeklyReflectionSystemPrompt(
+      context.reflectionType,
+      context.system,
+      context.weekNumber
+    );
 
     const userPrompt = userMessage
       ? buildWeeklyReflectionUserPrompt(context, userMessage)

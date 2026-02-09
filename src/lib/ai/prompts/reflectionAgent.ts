@@ -13,7 +13,8 @@
 
 import { CheckIn, HabitSystem, DayMemory } from '@/types/habit';
 import { CheckInPatterns } from '@/lib/patterns/patternFinder';
-import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE } from '@/lib/ai/memoryContext';
+import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE, difficultyLabel, DIFFICULTY_SCALE_NOTE } from '@/lib/ai/memoryContext';
+import { detectDomain, getDomainModule } from '@/lib/ai/domainKnowledge';
 
 /**
  * Context passed to the reflection agent
@@ -229,7 +230,8 @@ ${buildMemoryContext(dayMemories)}
 Habit: "${system.anchor}" → "${system.action}"
 Rep #${repCount}${patterns?.isFirstRep ? ' (FIRST REP - milestone moment!)' : ''}
 Today's outcome: ${isSuccess ? 'Completed' : isMiss ? 'Missed' : 'No trigger occurred'}
-Difficulty: ${difficulty}/5
+Difficulty: ${difficultyLabel(difficulty)}
+${DIFFICULTY_SCALE_NOTE}
 `;
 
   if (userGoal) {
@@ -243,6 +245,11 @@ Difficulty: ${difficulty}/5
   if (system.identity) {
     contextBlock += `Identity they're building: "${system.identity}"\n`;
   }
+
+  // Domain knowledge for coaching context
+  const domainKey = detectDomain(system);
+  const domainModule = getDomainModule(domainKey);
+  contextBlock += `\nHabit domain: ${domainModule.label}\n`;
 
   // Add pattern info if available
   if (patterns) {
@@ -312,7 +319,8 @@ export function buildReflectionOpenerPrompt(context: ReflectionContext): string 
 Habit: "${system.anchor}" → "${system.action}"
 Rep #${repCount}${patterns?.isFirstRep ? ' (FIRST REP!)' : ''}
 Today's outcome: ${isSuccess ? 'Completed' : isMiss ? 'Missed' : 'No trigger occurred'}
-Difficulty: ${difficulty}/5
+Difficulty: ${difficultyLabel(difficulty)}
+${DIFFICULTY_SCALE_NOTE}
 `;
 
   if (userGoal) {
@@ -346,7 +354,7 @@ Generate an opening message that:
 
 For FIRST REP: Celebrate the milestone. "First one done. That's the hardest part."
 For STREAK 3+: Acknowledge momentum. "That's X in a row."
-For HARD difficulty (4-5): Acknowledge the effort. "That took real effort today."
+For HARD difficulty (1-2): Acknowledge the effort. "That took real effort today."
 For MISS: No judgment. "No worries — misses happen."
 
 Keep it to 1-2 sentences. Ask ONE question.

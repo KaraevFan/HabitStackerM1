@@ -250,9 +250,9 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
       <section className="habit-card">
         <div className="habit-emoji">{emoji}</div>
 
-        <blockquote className="ritual-statement">
-          &ldquo;{heroStatement}&rdquo;
-        </blockquote>
+        {/* Split anchor/action for scannability */}
+        <p className="habit-anchor">{anchor}</p>
+        <p className="habit-action">{action}</p>
 
         {/* Week Progress - Clean dots without confusing labels */}
         <div className="week-progress">
@@ -309,10 +309,10 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
             </>
           ) : (
             <>
-              <Link href="/today?early=true" className="btn-text-small">
+              <Link href="/today?early=true" className="btn-text-positive">
                 I did it earlier
               </Link>
-              <Link href="/today?miss=true" className="btn-text-small">
+              <Link href="/today?miss=true" className="btn-text-miss">
                 I can&apos;t today
               </Link>
             </>
@@ -629,15 +629,20 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
           margin-bottom: 12px;
         }
 
-        .ritual-statement {
+        .habit-anchor {
+          font-size: 13px;
+          color: var(--text-tertiary);
+          margin: 0 0 6px 0;
+          line-height: 1.4;
+        }
+
+        .habit-action {
           font-family: var(--font-fraunces), 'Fraunces', Georgia, serif;
-          font-size: 18px;
+          font-size: 20px;
           font-weight: 500;
           color: var(--text-primary);
           line-height: 1.4;
           margin: 0 0 20px 0;
-          padding: 0;
-          border: none;
         }
 
         /* Week Progress - Cleaner design */
@@ -721,6 +726,39 @@ export default function PlanScreen({ habitData: initialHabitData }: PlanScreenPr
         }
 
         .btn-text-small:hover {
+          color: var(--text-secondary);
+        }
+
+        /* "I did it earlier" — positive, accent color */
+        .btn-text-positive {
+          background: none;
+          border: none;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--accent-primary);
+          cursor: pointer;
+          padding: 4px;
+          text-decoration: none;
+        }
+
+        .btn-text-positive:hover {
+          opacity: 0.8;
+        }
+
+        /* "I can't today" — visually recessed */
+        .btn-text-miss {
+          background: none;
+          border: none;
+          font-size: 12px;
+          color: var(--text-tertiary);
+          cursor: pointer;
+          padding: 4px;
+          text-decoration: none;
+          opacity: 0.7;
+        }
+
+        .btn-text-miss:hover {
+          opacity: 1;
           color: var(--text-secondary);
         }
 

@@ -4,6 +4,7 @@
  */
 
 import { HabitSystem, CheckIn, PatternSnapshot, WeeklyReflection } from '@/types/habit';
+import { difficultyLabel, DIFFICULTY_SCALE_NOTE } from '@/lib/ai/memoryContext';
 
 export interface PatternAgentContext {
   system: HabitSystem;
@@ -82,7 +83,7 @@ Response rate: ${total > 0 ? Math.round((completed / total) * 100) : 0}%
   const withDiff = last14.filter(c => c.difficultyRating);
   if (withDiff.length > 0) {
     const avgDiff = withDiff.reduce((sum, c) => sum + (c.difficultyRating || 3), 0) / withDiff.length;
-    prompt += `Avg difficulty: ${avgDiff.toFixed(1)}/5\n`;
+    prompt += `Avg difficulty: ${difficultyLabel(avgDiff)}\n${DIFFICULTY_SCALE_NOTE}\n`;
   }
 
   // Day-of-week breakdown

@@ -324,34 +324,34 @@ export default function WeeklyReflectionConversation({
             </div>
           )}
 
+          {/* Recommendation card — inline as a conversation element */}
+          {pendingRecommendation && !isTyping && (
+            <div className="flex justify-start">
+              <div className="max-w-[90%] rounded-xl p-4 border border-[var(--accent-primary)] bg-[var(--bg-secondary)]">
+                <p className="text-sm text-[var(--text-primary)] mb-3">
+                  {pendingRecommendation.text}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAcceptRecommendation}
+                    className="flex-1 py-2.5 rounded-full bg-[var(--accent-primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Accept and update
+                  </button>
+                  <button
+                    onClick={handleDeclineRecommendation}
+                    className="flex-1 py-2.5 rounded-full border border-[var(--bg-tertiary)] text-[var(--text-secondary)] text-sm hover:bg-[var(--bg-tertiary)] transition-colors"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
-
-      {/* Recommendation accept/decline */}
-      {pendingRecommendation && !isTyping && (
-        <div className="flex-shrink-0 px-6 pb-4">
-          <div className="bg-[var(--bg-secondary)] rounded-xl p-4 border border-[var(--accent-primary)] mb-3">
-            <p className="text-sm text-[var(--text-primary)] mb-3">
-              {pendingRecommendation.text}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleAcceptRecommendation}
-                className="flex-1 py-2.5 rounded-full bg-[var(--accent-primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
-              >
-                Accept and update
-              </button>
-              <button
-                onClick={handleDeclineRecommendation}
-                className="flex-1 py-2.5 rounded-full border border-[var(--bg-tertiary)] text-[var(--text-secondary)] text-sm hover:bg-[var(--bg-tertiary)] transition-colors"
-              >
-                Not now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Suggested replies */}
       {suggestedReplies.length > 0 && !isTyping && !readyToClose && !pendingRecommendation && (

@@ -16,6 +16,7 @@
 import { CheckIn, HabitSystem, DayMemory } from '@/types/habit';
 import { CheckInPatterns } from '@/lib/patterns/patternFinder';
 import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE } from '@/lib/ai/memoryContext';
+import { detectDomain, getDomainModule } from '@/lib/ai/domainKnowledge';
 
 /**
  * Context passed to the recovery coach
@@ -278,6 +279,10 @@ Total reps: ${completedCount}
   if (system.identity) {
     contextBlock += `Identity: "${system.identity}"\n`;
   }
+
+  // Domain context for coaching
+  const domainModule = getDomainModule(detectDomain(system));
+  contextBlock += `Habit domain: ${domainModule.label}\n`;
 
   if (system.tinyVersion) {
     contextBlock += `Tiny version (fallback): "${system.tinyVersion}"\n`;

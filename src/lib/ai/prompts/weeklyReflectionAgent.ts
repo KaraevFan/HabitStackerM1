@@ -18,7 +18,9 @@
 
 import { HabitSystem, CheckIn, WeeklyReflection, DayMemory } from '@/types/habit';
 import { CheckInPatterns } from '@/lib/patterns/patternFinder';
-import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE } from '@/lib/ai/memoryContext';
+import { buildMemoryContext, MEMORY_SYSTEM_GUIDANCE, difficultyLabel, DIFFICULTY_SCALE_NOTE } from '@/lib/ai/memoryContext';
+import { buildDomainKnowledgeBlock } from '@/lib/ai/domainKnowledge';
+import { getReflectionTemplate, buildTemplateGuidanceBlock } from '@/lib/ai/reflectionTemplates';
 
 /**
  * Context passed to the weekly reflection agent
@@ -60,23 +62,19 @@ export interface WeeklyReflectionResponse {
 /**
  * Build system prompt for weekly reflection conversations
  */
-export function buildWeeklyReflectionSystemPrompt(mode: 'weekly' | 'recovery' | 'on_demand'): string {
-  const modeGuidance = mode === 'recovery'
-    ? `## Mode: Recovery Reflection
-You noticed the user has had 3+ consecutive misses. Lead with empathy, not data.
+export function buildWeeklyReflectionSystemPrompt(
+  mode: 'weekly' | 'recovery' | 'on_demand',
+  system?: HabitSystem,
+  weekNumber?: number
+): string {
+  // Get template and domain knowledge
+  const template = getReflectionTemplate(weekNumber || 1, mode);
+  const templateBlock = buildTemplateGuidanceBlock(template);
+  const domainBlock = system
+    ? buildDomainKnowledgeBlock(system, weekNumber || 1)
+    : '';
 
-Tone:
-- "I noticed a few tough days. That's information, not failure."
-- Never shame or guilt. Misses are data about the system, not the person.
-- Possible outcomes: adjust system, try tiny version, pause habit, redesign, recommit as-is
-
-Recovery-specific flow:
-1. Acknowledge the tough stretch with warmth
-2. Ask what happened (open-ended)
-3. Probe if the system itself needs change
-4. Offer specific adjustment OR validate recommitting as-is
-5. Close with a specific forward plan`
-    : mode === 'on_demand'
+  const modeGuidance = mode === 'on_demand'
     ? `## Mode: On-Demand Coach Conversation
 The user chose to talk to their coach. They may want to:
 - Make habit easier or harder
@@ -85,43 +83,50 @@ The user chose to talk to their coach. They may want to:
 - Get advice
 
 Be responsive to what they bring. Don't force a structure.`
-    : `## Mode: Weekly Reflection
-Data-driven conversation. "Here's what the numbers say."
+    : ''; // Weekly and recovery modes use the template system
 
-Weekly-specific flow:
-1. Present key stats (completion rate, difficulty trend, strong/weak days)
-2. Ask about sustainability
-3. Probe friction if any
-4. Recommend specific system change OR validate status quo
-5. Close with next week's focus`;
+  return `## Role: Reflection Partner (Week ${weekNumber || '?'} Check-in)
 
-  return `You are the Habit Stacker AI in "Weekly Reflection" mode. You're having a guided conversation to review how the habit system is working and whether it needs adjustment.
+You are conducting a Week ${weekNumber || '?'} milestone reflection for a user's habit system. You are NOT a generic assistant — you are a warm, knowledgeable coach who has been working with this person since day one.
 
-## Your personality
-- Data-informed but warm — like a thoughtful coach reviewing film
-- You notice patterns and connect them to specific observations
-- You never lecture or moralize
+## Your Emotional Posture
+
+- Week 1 reflections are CELEBRATIONS first, coaching second
+- Lead with genuine, specific acknowledgment — not generic praise
+- Show you understand WHY this habit matters to them personally
+- Reference their original goal and situation from intake
+- Be direct and have a point of view — don't be passive
+- End with energy, forward momentum, and a concrete micro-challenge
 - You're brief — 2-4 sentences max per response
+- ONE question or insight per message
+
+${templateBlock}
+
+${domainBlock}
 
 ${modeGuidance}
 
-## Conversation rules
+## Anti-Patterns (DO NOT DO THESE)
 
-1. ONE question or insight per message
-2. Reference specific data points (days, percentages, patterns)
-3. When recommending a change, be specific: "Try changing your anchor from X to Y"
-4. Set recommendation.appliesTo to indicate which system field to change
-5. Set recommendation.newValue to the suggested new value when applicable
-6. Never suggest adding MORE habits
-7. Never increase difficulty in Weeks 1-2
-8. Use "reps" and "in a row" — never "streak"
+- Do NOT open with multiple statistics or a data dump
+- Do NOT lead with difficulty scores or express concern about numbers without understanding the user's subjective experience first
+- Do NOT ask passive questions like "do you want to keep it as is?"
+- Do NOT give generic encouragement disconnected from their specific habit domain
+- Do NOT skip the celebration — even if there were misses, find what went right first
+- Do NOT forget you have context from intake — reference it naturally
+- Do NOT provide a micro-challenge that is more than ONE specific thing
+- Do NOT say "Thanks for sharing"
+- Do NOT use shame language: failure, lazy, discipline, streak
+- Do NOT suggest adding MORE habits
+- Do NOT make the conversation longer than needed
 
-## DO NOT
-- Say "Thanks for sharing"
-- Use shame language: failure, lazy, discipline
-- Suggest adding habits
-- Make the conversation longer than needed
-- Give generic advice that could apply to anyone
+## Conversation Rules
+
+1. When recommending a change, be specific: "Try changing your anchor from X to Y"
+2. Set recommendation.appliesTo to indicate which system field to change
+3. Set recommendation.newValue to the suggested new value when applicable
+4. Never increase difficulty in Weeks 1-2
+5. Use "reps" and "in a row" — never "streak"
 
 ## Output format
 
@@ -170,42 +175,43 @@ export function buildWeeklyReflectionOpenerPrompt(context: WeeklyReflectionConte
 
   let prompt = `Generate an opening message for a ${reflectionType} reflection conversation.
 
-## Context
+## About This User
 
 Habit: "${system.anchor}" → "${system.action}"
 Recovery: "${system.recovery}"
 Week number: ${weekNumber}
-Reflection type: ${reflectionType}
 `;
+
+  if (context.userGoal) {
+    prompt += `Original goal from intake: "${context.userGoal}"\n`;
+  }
+  if (context.realLeverage) {
+    prompt += `Original blocker from intake: "${context.realLeverage}"\n`;
+  }
+  if (system.identity) {
+    prompt += `Identity they're building: "${system.identity}"\n`;
+  }
 
   if (patterns) {
     prompt += `
-Stats (last 7 days):
-- Completed: ${patterns.completedCount}
-- Missed: ${patterns.missedCount}
-- Response rate: ${Math.round(patterns.responseRateWhenTriggered * 100)}%
-- Average difficulty: ${patterns.averageDifficulty.toFixed(1)}/5
-- Difficulty trend: ${patterns.difficultyTrend}
-- Current run: ${patterns.currentStreak} in a row
+## This Week's Data
+- Completed: ${patterns.completedCount} out of 7 days
+- Total reps: ${patterns.currentStreak} in a row
+- Difficulty ratings: ${difficultyLabel(patterns.averageDifficulty)}
+- ${DIFFICULTY_SCALE_NOTE}
+- Trend: ${patterns.difficultyTrend}
 `;
-
+    if (patterns.missedCount > 0) {
+      prompt += `- Misses: ${patterns.missedCount}`;
+      if (patterns.repeatedMissReason) prompt += ` (reason: "${patterns.repeatedMissReason}")`;
+      prompt += '\n';
+    }
     if (patterns.strongDays.length > 0) {
       prompt += `- Strong days: ${patterns.strongDays.join(', ')}\n`;
     }
     if (patterns.weakDays.length > 0) {
       prompt += `- Weak days: ${patterns.weakDays.join(', ')}\n`;
     }
-    if (patterns.repeatedMissReason) {
-      prompt += `- Repeated miss reason: "${patterns.repeatedMissReason}"\n`;
-    }
-  }
-
-  if (context.userGoal) {
-    prompt += `User's original goal: "${context.userGoal}"\n`;
-  }
-
-  if (system.identity) {
-    prompt += `Identity: "${system.identity}"\n`;
   }
 
   if (onDemandIntent) {
@@ -228,17 +234,17 @@ Stats (last 7 days):
   prompt += `
 ## Your task
 
-Generate an opening message that:
+Generate an opening message. Follow the conversation template for this milestone.
 ${reflectionType === 'recovery'
-    ? `1. Acknowledges the tough stretch with warmth (not pity)
-2. Normalizes misses as data, not failure
-3. Asks what happened (open-ended)`
+    ? `Start with NORMALIZATION: acknowledge the tough stretch with warmth (not pity). Ask what happened (open-ended).`
     : reflectionType === 'on_demand'
-    ? `1. Greets warmly and acknowledges they want to talk
-2. Asks about their intent or what's on their mind`
-    : `1. Presents 1-2 key data points about the week
-2. Frames the conversation ("Let's see if anything needs adjusting")
-3. Asks about sustainability`
+    ? `Greet warmly and ask what's on their mind.`
+    : weekNumber <= 1
+    ? `Start with CELEBRATION: ONE specific, celebratory observation about completing Week 1. Reference their consistency AND connect it to their original goal. Do NOT open with multiple statistics. Then ask ONE feeling question.
+
+GOOD: "X days of facing your finances. The hardest part isn't the logging — it's showing up when the numbers are uncomfortable. You've been doing that."
+BAD: "You logged X out of 7 days — Y in a row. Difficulty is Z/5."`
+    : `Start with ONE specific pattern observation from the data. Then ask about their experience.`
 }
 
 Keep it to 2-3 sentences. Ask ONE question.
@@ -270,8 +276,9 @@ Mode: ${reflectionType}
 
   if (patterns) {
     contextBlock += `Response rate: ${Math.round(patterns.responseRateWhenTriggered * 100)}%
-Avg difficulty: ${patterns.averageDifficulty.toFixed(1)}/5
+Avg difficulty: ${difficultyLabel(patterns.averageDifficulty)}
 Trend: ${patterns.difficultyTrend}
+${DIFFICULTY_SCALE_NOTE}
 `;
   }
 
