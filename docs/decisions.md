@@ -215,3 +215,29 @@ interface SetupItem {
 - Clearer mental model for users
 - setupChecklist is for pre-launch prep, not ongoing ritual
 - followUp completes the ritual loop and happens every time
+
+---
+
+## 2026-02-10 — R21: External User Readiness
+
+### Decision: JSONB blob for habit data (not normalized tables)
+
+**Context:** Migrating localStorage to Supabase for 3-5 user trial.
+
+**Decision:** Store `HabitData` as a single JSONB column per user. No table normalization.
+
+**Rationale:** 5 users for 7 days = trivial data volume. Matches existing code structure (read/write as single object). Normalize later if product validates.
+
+### Decision: Sync layer via onSave hook (not repository migration)
+
+**Context:** 32 files import directly from habitStore.ts. Repository interface exists but is unused by components.
+
+**Decision:** Add a 4-line onSave hook to habitStore. Sync layer registers a callback that pushes to Supabase on every save. No component changes needed.
+
+**Rationale:** Lowest-risk migration path. Zero changes to 32 component files. localStorage stays as fallback cache.
+
+### Decision: @supabase/ssr (not deprecated auth-helpers-nextjs)
+
+**Context:** `@supabase/auth-helpers-nextjs` is deprecated. `@supabase/ssr` is the current recommendation.
+
+**Decision:** Use `@supabase/ssr` for all server/middleware/browser Supabase clients.
