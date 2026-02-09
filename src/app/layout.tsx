@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Outfit, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import "./globals.css";
 
 // Display font - warm serif for headings
@@ -45,6 +46,7 @@ export default function RootLayout({
         <div className="app-frame">
           <AuthProvider>
             {children}
+            <FeedbackWidget />
           </AuthProvider>
         </div>
       </body>
