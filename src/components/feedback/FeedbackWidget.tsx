@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthContext } from '@/components/auth/AuthProvider';
 import { loadHabitData, getRecentCheckIns } from '@/lib/store/habitStore';
-import { getUserState } from '@/hooks/useUserState';
 import type { FeedbackContext } from '@/types/feedback';
 
 type Status = 'closed' | 'open' | 'sending' | 'sent';

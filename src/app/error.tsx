@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 export default function GlobalError({
   reset,
 }: {
@@ -21,12 +23,12 @@ export default function GlobalError({
         >
           Try again
         </button>
-        <a
+        <Link
           href="/"
           className="block text-sm text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
         >
           Go home
-        </a>
+        </Link>
       </div>
     </div>
   );
