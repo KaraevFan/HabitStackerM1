@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MenuSheetProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface MenuSheetProps {
  */
 export default function MenuSheet({ isOpen, onClose }: MenuSheetProps) {
   const router = useRouter();
+  const { signOut } = useAuth();
 
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
@@ -60,6 +62,15 @@ export default function MenuSheet({ isOpen, onClose }: MenuSheetProps) {
       onClick: () => {
         onClose();
         router.push('/reset');
+      },
+    },
+    {
+      label: 'Sign out',
+      icon: '👋',
+      description: 'Sign out of your account',
+      onClick: () => {
+        onClose();
+        signOut();
       },
     },
   ];
