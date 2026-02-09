@@ -12,6 +12,7 @@ import {
   clearConversation,
 } from '@/lib/store/conversationStore';
 import { IntakeAnalytics } from '@/lib/analytics/intakeAnalytics';
+import { sanitizeAIError } from '@/lib/ai/errorMessages';
 
 interface UseIntakeAgentReturn {
   state: IntakeState;
@@ -80,7 +81,10 @@ export function useIntakeAgent(): UseIntakeAgentReturn {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: history, forceRecommend }),
-          signal: abortControllerRef.current.signal,
+          signal: AbortSignal.any([
+            abortControllerRef.current.signal,
+            AbortSignal.timeout(30_000),
+          ]),
         });
 
         if (!response.ok) {
@@ -196,7 +200,7 @@ export function useIntakeAgent(): UseIntakeAgentReturn {
         }
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to start conversation';
+      const errorMsg = sanitizeAIError(err);
       setError(errorMsg);
       setHasStarted(false);
       IntakeAnalytics.errorOccurred(errorMsg, 'startConversation');
@@ -247,7 +251,7 @@ export function useIntakeAgent(): UseIntakeAgentReturn {
           }
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to send message';
+        const errorMsg = sanitizeAIError(err);
         setError(errorMsg);
         IntakeAnalytics.errorOccurred(errorMsg, 'sendMessage');
       } finally {
@@ -277,7 +281,7 @@ export function useIntakeAgent(): UseIntakeAgentReturn {
         }
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to force recommendation';
+      const errorMsg = sanitizeAIError(err);
       setError(errorMsg);
       IntakeAnalytics.errorOccurred(errorMsg, 'forceRecommend');
     } finally {
@@ -338,7 +342,7 @@ export function useIntakeAgent(): UseIntakeAgentReturn {
         messages: [...prev.messages, lastUserMessage],
         turnCount: prev.turnCount + 1,
       }));
-      setError(err instanceof Error ? err.message : 'Failed to retry');
+      setError(sanitizeAIError(err));
     } finally {
       setIsLoading(false);
       setStreamingMessage(null);
